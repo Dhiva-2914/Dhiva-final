@@ -1,10 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { Search, Download, Save, FileText, X, ChevronDown, Loader2, Settings, Video, Code, TrendingUp, TestTube, Image, CheckCircle, Menu } from 'lucide-react';
+import { Search, Download, Save, FileText, X, ChevronDown, Loader2, Settings, Video, Code, TrendingUp, TestTube, Image, CheckCircle } from 'lucide-react';
 import { FeatureType, AppMode } from '../App';
 import { apiService, Space } from '../services/api';
 import CustomScrollbar from './CustomScrollbar';
 import { getConfluenceSpaceAndPageFromUrl } from '../utils/urlUtils';
-import Sidebar from './Sidebar';
 
 interface AIPoweredSearchProps {
   onClose: () => void;
@@ -33,7 +32,6 @@ const AIPoweredSearch: React.FC<AIPoweredSearchProps> = ({
   const [pages, setPages] = useState<string[]>([]);
   const [error, setError] = useState('');
   const [showToast, setShowToast] = useState(false);
-  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
   const toggleSelectAllPages = () => {
     if (selectAllPages) {
@@ -153,23 +151,11 @@ const AIPoweredSearch: React.FC<AIPoweredSearchProps> = ({
 
   return (
     <div className="fixed inset-0 bg-white flex items-center justify-center z-40 p-4">
-      <Sidebar
-        isOpen={isSidebarOpen}
-        onClose={() => setIsSidebarOpen(false)}
-        onFeatureSelect={(feature) => {
-          onFeatureSelect(feature);
-          setIsSidebarOpen(false);
-        }}
-        activeFeature={'search'}
-      />
       <div className="bg-white/80 backdrop-blur-xl border-2 border-[#DFE1E6] rounded-2xl w-full max-w-7xl max-h-[90vh] overflow-hidden">
         {/* Header */}
         <div className="bg-gradient-to-r from-confluence-blue/90 to-confluence-light-blue/90 backdrop-blur-xl p-6 text-white border-b border-white/10">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-3">
-              <button onClick={() => setIsSidebarOpen(true)} className="mr-2 p-2 rounded hover:bg-gray-100">
-                <Menu className="w-7 h-7 text-gray-500" />
-              </button>
               <Search className="w-8 h-8" />
               <div>
                 <h2 className="text-2xl font-bold">Confluence AI Assistant</h2>

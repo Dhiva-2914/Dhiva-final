@@ -43,6 +43,9 @@ const AgentMode: React.FC<AgentModeProps> = ({ onClose, onModeSelect, autoSpaceK
   const [selectedPages, setSelectedPages] = useState<string[]>([]);
   const [error, setError] = useState('');
 
+  // Add state for selectAllPages
+  const [selectAllPages, setSelectAllPages] = useState(false);
+
   // Auto-detect and auto-select space and page if only one exists, or from URL if provided
   useEffect(() => {
     const loadSpacesAndPages = async () => {
@@ -96,6 +99,11 @@ const AgentMode: React.FC<AgentModeProps> = ({ onClose, onModeSelect, autoSpaceK
       loadPages();
     }
   }, [selectedSpace]);
+
+  // Sync "Select All" checkbox state
+  useEffect(() => {
+    setSelectAllPages(pages.length > 0 && selectedPages.length === pages.length);
+  }, [selectedPages, pages]);
 
   const handleGoalSubmit = async () => {
     if (!goal.trim() || !selectedSpace || selectedPages.length === 0) {
@@ -489,8 +497,71 @@ ${outputTabs.find(tab => tab.id === 'used-tools')?.content || ''}
           {/* Auto-detected Space and Page Info */}
           {!planSteps.length && !isPlanning && (
             <div className="max-w-4xl mx-auto mb-6">
-              <div className="bg-white/60 backdrop-blur-xl rounded-xl p-6 border border-white/20 shadow-lg text-center">
+              <div className="bg-white/60 backdrop-blur-xl rounded-xl p-6 border border-white/20 shadow-lg">
                 <h3 className="text-xl font-bold text-gray-800 mb-4">Detected Confluence Context</h3>
+                {/* Space Selection */}
+                <div className="mb-4">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Select Confluence Space
+                  </label>
+                  <div className="relative">
+                    <select
+                      value={selectedSpace}
+                      onChange={(e) => setSelectedSpace(e.target.value)}
+                      className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 appearance-none bg-white/70 backdrop-blur-sm"
+                    >
+                      <option value="">Choose a space...</option>
+                      {spaces.map(space => (
+                        <option key={space.key} value={space.key}>{space.name} ({space.key})</option>
+                      ))}
+                    </select>
+                    <span className="absolute right-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400">▼</span>
+                  </div>
+                </div>
+                {/* Page Selection */}
+                <div className="mb-4">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Select Pages to Analyze
+                  </label>
+                  <div className="space-y-2 max-h-40 overflow-y-auto border border-gray-300 rounded-lg p-2 bg-white/50 backdrop-blur-sm">
+                    {pages.map(page => (
+                      <label key={page} className="flex items-center space-x-2 p-2 hover:bg-white/30 rounded cursor-pointer backdrop-blur-sm">
+                        <input
+                          type="checkbox"
+                          checked={selectedPages.includes(page)}
+                          onChange={(e) => {
+                            if (e.target.checked) {
+                              setSelectedPages([...selectedPages, page]);
+                            } else {
+                              setSelectedPages(selectedPages.filter(p => p !== page));
+                            }
+                          }}
+                          className="rounded border-gray-300 text-orange-500 focus:ring-orange-500"
+                        />
+                        <span className="text-sm text-gray-700">{page}</span>
+                      </label>
+                    ))}
+                  </div>
+                  <p className="text-sm text-gray-500 mt-1">
+                    {selectedPages.length} page(s) selected
+                  </p>
+                </div>
+                <div className="flex items-center space-x-2 mb-2">
+                  <input
+                    type="checkbox"
+                    checked={selectAllPages}
+                    onChange={() => {
+                      if (selectAllPages) {
+                        setSelectedPages([]);
+                      } else {
+                        setSelectedPages([...pages]);
+                      }
+                      setSelectAllPages(!selectAllPages);
+                    }}
+                    className="rounded border-gray-300 text-orange-500 focus:ring-orange-500"
+                  />
+                  <span className="text-sm text-gray-700 font-medium">Select All Pages</span>
+                </div>
                 {selectedSpace && selectedPages.length === 1 && (
                   <div className="mb-4 text-green-700 font-semibold">
                     Auto-selected: Space <span className="font-bold">{spaces.find(s => s.key === selectedSpace)?.name || selectedSpace}</span> &nbsp;|&nbsp; Page <span className="font-bold">{selectedPages[0]}</span>

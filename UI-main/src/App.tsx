@@ -8,6 +8,7 @@ import ImpactAnalyzer from './components/ImpactAnalyzer';
 import TestSupportTool from './components/TestSupportTool';
 import ImageInsights from './components/ImageInsights';
 import CircularLauncher from './components/CircularLauncher';
+import Sidebar from './components/Sidebar';
 
 export type FeatureType = 'search' | 'video' | 'code' | 'impact' | 'test' | 'image' | null;
 export type AppMode = 'agent' | 'tool' | null;
@@ -17,6 +18,8 @@ function App() {
   const [isAppOpen, setIsAppOpen] = useState(false);
   const [autoSpaceKey, setAutoSpaceKey] = useState<string | null>(null);
   const [appMode, setAppMode] = useState<AppMode>(null);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  const [activeTool, setActiveTool] = useState('search');
 
   // Extract space key from URL parameter
   useEffect(() => {
@@ -76,11 +79,33 @@ function App() {
             <ModeSelector onModeSelect={handleModeSelect} onClose={handleAppClose} />
           ) : appMode === 'agent' ? (
             <AgentMode onClose={handleAppClose} onModeSelect={setAppMode} autoSpaceKey={autoSpaceKey} isSpaceAutoConnected={!!autoSpaceKey} />
-          ) : appMode === 'tool' && activeFeature ? (
-            renderActiveFeature()
-          ) : appMode === 'tool' ? (
-            <AIPoweredSearch onClose={handleAppClose} onFeatureSelect={setActiveFeature} autoSpaceKey={autoSpaceKey} isSpaceAutoConnected={!!autoSpaceKey} />
-          ) : null}
+          ) : appMode === 'tool' && (
+            <Sidebar
+              isOpen={isSidebarOpen}
+              onClose={() => setIsSidebarOpen(false)}
+              onToolSelect={(toolId) => setActiveTool(toolId)}
+              activeTool={activeTool}
+            />
+          )}
+
+          {appMode === 'tool' && activeTool === 'search' && (
+            <AIPoweredSearch onClose={handleAppClose} onFeatureSelect={setActiveFeature} onModeSelect={setAppMode} autoSpaceKey={autoSpaceKey} isSpaceAutoConnected={!!autoSpaceKey} />
+          )}
+          {appMode === 'tool' && activeTool === 'video' && (
+            <VideoSummarizer onClose={handleAppClose} onFeatureSelect={setActiveFeature} onModeSelect={setAppMode} autoSpaceKey={autoSpaceKey} isSpaceAutoConnected={!!autoSpaceKey} />
+          )}
+          {appMode === 'tool' && activeTool === 'code' && (
+            <CodeAssistant onClose={handleAppClose} onFeatureSelect={setActiveFeature} onModeSelect={setAppMode} autoSpaceKey={autoSpaceKey} isSpaceAutoConnected={!!autoSpaceKey} />
+          )}
+          {appMode === 'tool' && activeTool === 'impact' && (
+            <ImpactAnalyzer onClose={handleAppClose} onFeatureSelect={setActiveFeature} onModeSelect={setAppMode} autoSpaceKey={autoSpaceKey} isSpaceAutoConnected={!!autoSpaceKey} />
+          )}
+          {appMode === 'tool' && activeTool === 'test' && (
+            <TestSupportTool onClose={handleAppClose} onFeatureSelect={setActiveFeature} onModeSelect={setAppMode} autoSpaceKey={autoSpaceKey} isSpaceAutoConnected={!!autoSpaceKey} />
+          )}
+          {appMode === 'tool' && activeTool === 'image' && (
+            <ImageInsights onClose={handleAppClose} onFeatureSelect={setActiveFeature} onModeSelect={setAppMode} autoSpaceKey={autoSpaceKey} isSpaceAutoConnected={!!autoSpaceKey} />
+          )}
         </div>
       )}
     </div>

@@ -456,7 +456,7 @@ ${outputTabs.find(tab => tab.id === 'used-tools')?.content || ''}
 
   // Calculate progress percentage, clamp to 100% if complete
   const progressPercent = planSteps.length === 0 ? 0 :
-    (currentStep + 1 >= planSteps.length ? 100 : Math.round(((currentStep + 1) / planSteps.length) * 100));
+    (planSteps.every(s => s.status === 'completed') ? 100 : Math.round(((currentStep + 1) / planSteps.length) * 100));
 
   return (
     <div className="fixed inset-0 backdrop-blur-sm flex items-center justify-center z-40 p-4">

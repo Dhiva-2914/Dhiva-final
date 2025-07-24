@@ -1,0 +1,104 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Custom scrollbar styles */
+.scrollbar-thin {
+  scrollbar-width: thin;
+}
+
+.scrollbar-track-white\/10::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 6px;
+}
+
+.scrollbar-thumb-white\/30::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.3);
+  border-radius: 6px;
+}
+
+.scrollbar-thumb-white\/30:hover::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.5);
+}
+
+.scrollbar-track-white\/50::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.5);
+  border-radius: 6px;
+}
+
+.scrollbar-thumb-white\/80::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.8);
+  border-radius: 6px;
+}
+
+.scrollbar-thumb-white\/80:hover::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 1);
+}
+
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 6px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.3);
+  border-radius: 6px;
+  transition: background 0.2s ease;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.5);
+}
+
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+/* Custom horizontal scrollbar for feature navigation */
+.feature-nav-scroll {
+  scrollbar-width: none !important;
+  -ms-overflow-style: none !important;
+  position: relative !important;
+}
+
+.feature-nav-scroll::-webkit-scrollbar {
+  display: none !important;
+}
+
+.feature-nav-scroll-container {
+  position: relative;
+  overflow: hidden;
+}
+
+.feature-nav-scroll-track {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 4px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 2px;
+  margin: 0 4px;
+}
+
+.feature-nav-scroll-thumb {
+  position: absolute;
+  bottom: 0;
+  height: 4px;
+  background: rgba(255, 255, 255, 0.9);
+  border-radius: 2px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  min-width: 20px;
+}
+
+.feature-nav-scroll-thumb:hover {
+  background: rgba(255, 255, 255, 1);
+  height: 6px;
+  transform: translateY(-1px);
+}

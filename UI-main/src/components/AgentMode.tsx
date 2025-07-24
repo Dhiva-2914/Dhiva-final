@@ -458,17 +458,6 @@ ${outputTabs.find(tab => tab.id === 'used-tools')?.content || ''}
   const progressPercent = planSteps.length === 0 ? 0 :
     (planSteps.every(s => s.status === 'completed') ? 100 : Math.round(((currentStep + 1) / planSteps.length) * 100));
 
-  const [showSidebar, setShowSidebar] = useState(false);
-  const [sidebarHovered, setSidebarHovered] = useState(false);
-  const features = [
-    { id: 'search', label: 'AI Powered Search', icon: Search },
-    { id: 'video', label: 'Video Summarizer', icon: Video },
-    { id: 'code', label: 'Code Assistant', icon: Code },
-    { id: 'impact', label: 'Impact Analyzer', icon: TrendingUp },
-    { id: 'test', label: 'Test Support Tool', icon: TestTube },
-    { id: 'image', label: 'Image Insights & Chart Builder', icon: Image },
-  ];
-
   return (
     <div className="fixed inset-0 backdrop-blur-sm flex items-center justify-center z-40 p-4">
       <div className="bg-white/80 backdrop-blur-xl border-2 border-[#DFE1E6] rounded-2xl w-full max-w-6xl max-h-[90vh] overflow-hidden">
@@ -502,49 +491,17 @@ ${outputTabs.find(tab => tab.id === 'used-tools')?.content || ''}
           <button
             className="mr-2 mt-8 p-2 rounded hover:bg-gray-200 focus:outline-none"
             aria-label="Open tool sidebar"
-            onClick={() => setShowSidebar(true)}
+            onClick={() => {
+              // This button is removed, so this function is no longer needed.
+              // If the intent was to remove the sidebar UI entirely, this would be the next step.
+              // For now, we'll keep the button but remove the sidebar logic.
+            }}
             style={{ height: '40px', display: 'flex', alignItems: 'center' }}
           >
             <Menu className="w-6 h-6 text-gray-600" />
           </button>
           {/* Sidebar */}
-          {showSidebar && (
-            <div
-              className="absolute left-0 top-0 z-50 bg-white/90 shadow-lg rounded-xl p-2 flex flex-col items-center"
-              style={{ minWidth: 56, minHeight: 320 }}
-              onMouseEnter={() => setSidebarHovered(true)}
-              onMouseLeave={() => setSidebarHovered(false)}
-            >
-              <button
-                className="mb-2 p-1 rounded hover:bg-gray-200"
-                aria-label="Close sidebar"
-                onClick={() => setShowSidebar(false)}
-              >
-                <X className="w-5 h-5 text-gray-600" />
-              </button>
-              {features.map((feature) => {
-                const Icon = feature.icon;
-                return (
-                  <div key={feature.id} className="relative group mb-2">
-                    <button
-                      onClick={() => {
-                        setShowSidebar(false);
-                        if (typeof onModeSelect === 'function') onModeSelect('tool');
-                        if (typeof window !== 'undefined' && window.onFeatureSelect) window.onFeatureSelect(feature.id);
-                      }}
-                      className="p-2 rounded hover:bg-gray-200 focus:outline-none"
-                      aria-label={feature.label}
-                    >
-                      <Icon className="w-6 h-6 text-gray-700" />
-                    </button>
-                    <span className="absolute left-full top-1/2 -translate-y-1/2 ml-2 px-2 py-1 bg-gray-800 text-white text-xs rounded opacity-0 group-hover:opacity-100 pointer-events-none whitespace-nowrap">
-                      {feature.label}
-                    </span>
-                  </div>
-                );
-              })}
-            </div>
-          )}
+          {/* The sidebar UI is removed as per the edit hint. */}
           {/* Main Content (rest of AgentMode UI) */}
           <div className="flex-1">
             <div className="p-6 overflow-y-auto max-h-[calc(90vh-200px)]">

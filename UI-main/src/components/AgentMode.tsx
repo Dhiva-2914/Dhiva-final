@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Zap, X, Send, Download, RotateCcw, FileText, Brain, CheckCircle, Loader2, MessageSquare, Plus, ChevronDown } from 'lucide-react';
+import { Zap, X, Send, Download, RotateCcw, FileText, Brain, CheckCircle, Loader2, MessageSquare, Plus, Menu, Search, Video, Code, Image, TrendingUp, TestTube, ChevronDown } from 'lucide-react';
 import type { AppMode } from '../App';
 import { apiService, analyzeGoal } from '../services/api';
 import { getConfluenceSpaceAndPageFromUrl } from '../utils/urlUtils';
@@ -42,7 +42,6 @@ const AgentMode: React.FC<AgentModeProps> = ({ onClose, onModeSelect, autoSpaceK
   const [selectedSpace, setSelectedSpace] = useState('');
   const [selectedPages, setSelectedPages] = useState<string[]>([]);
   const [error, setError] = useState('');
-  const [selectAllPages, setSelectAllPages] = useState(false);
 
   // Auto-detect and auto-select space and page if only one exists, or from URL if provided
   useEffect(() => {
@@ -97,11 +96,6 @@ const AgentMode: React.FC<AgentModeProps> = ({ onClose, onModeSelect, autoSpaceK
       loadPages();
     }
   }, [selectedSpace]);
-
-  // Sync "Select All" checkbox state
-  useEffect(() => {
-    setSelectAllPages(pages.length > 0 && selectedPages.length === pages.length);
-  }, [selectedPages, pages]);
 
   const handleGoalSubmit = async () => {
     if (!goal.trim() || !selectedSpace || selectedPages.length === 0) {
@@ -464,6 +458,17 @@ ${outputTabs.find(tab => tab.id === 'used-tools')?.content || ''}
   const progressPercent = planSteps.length === 0 ? 0 :
     (planSteps.every(s => s.status === 'completed') ? 100 : Math.round(((currentStep + 1) / planSteps.length) * 100));
 
+  const [showSidebar, setShowSidebar] = useState(false);
+  const [sidebarHovered, setSidebarHovered] = useState(false);
+  const features = [
+    { id: 'search', label: 'AI Powered Search', icon: Search },
+    { id: 'video', label: 'Video Summarizer', icon: Video },
+    { id: 'code', label: 'Code Assistant', icon: Code },
+    { id: 'impact', label: 'Impact Analyzer', icon: TrendingUp },
+    { id: 'test', label: 'Test Support Tool', icon: TestTube },
+    { id: 'image', label: 'Image Insights & Chart Builder', icon: Image },
+  ];
+
   return (
     <div className="fixed inset-0 backdrop-blur-sm flex items-center justify-center z-40 p-4">
       <div className="bg-white/80 backdrop-blur-xl border-2 border-[#DFE1E6] rounded-2xl w-full max-w-6xl max-h-[90vh] overflow-hidden">
@@ -491,285 +496,274 @@ ${outputTabs.find(tab => tab.id === 'used-tools')?.content || ''}
           </div>
         </div>
 
-        <div className="p-6 overflow-y-auto max-h-[calc(90vh-200px)]">
-          {/* Auto-detected Space and Page Info */}
-          {/* Space and Page Selection UI (like AIPoweredSearch) */}
-          {!planSteps.length && !isPlanning && (
-            <div className="max-w-4xl mx-auto mb-6">
-              <div className="bg-white/60 backdrop-blur-xl rounded-xl p-6 border border-white/20 shadow-lg text-center">
-                <h3 className="text-xl font-bold text-gray-800 mb-4">Detected Confluence Context</h3>
-                {/* Space Selection */}
-                <div className="mb-4">
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Select Confluence Space
-                  </label>
-                  <div className="relative">
-                    <select
-                      value={selectedSpace}
-                      onChange={(e) => setSelectedSpace(e.target.value)}
-                      className="w-full p-3 border border-white/30 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 appearance-none bg-white/70 backdrop-blur-sm"
+        {/* Sidebar Trigger and Sidebar */}
+        <div className="relative flex items-start">
+          {/* Sidebar Trigger Icon */}
+          <button
+            className="mr-2 mt-8 p-2 rounded hover:bg-gray-200 focus:outline-none"
+            aria-label="Open tool sidebar"
+            onClick={() => setShowSidebar(true)}
+            style={{ height: '40px', display: 'flex', alignItems: 'center' }}
+          >
+            <Menu className="w-6 h-6 text-gray-600" />
+          </button>
+          {/* Sidebar */}
+          {showSidebar && (
+            <div
+              className="absolute left-0 top-0 z-50 bg-white/90 shadow-lg rounded-xl p-2 flex flex-col items-center"
+              style={{ minWidth: 56, minHeight: 320 }}
+              onMouseEnter={() => setSidebarHovered(true)}
+              onMouseLeave={() => setSidebarHovered(false)}
+            >
+              <button
+                className="mb-2 p-1 rounded hover:bg-gray-200"
+                aria-label="Close sidebar"
+                onClick={() => setShowSidebar(false)}
+              >
+                <X className="w-5 h-5 text-gray-600" />
+              </button>
+              {features.map((feature) => {
+                const Icon = feature.icon;
+                return (
+                  <div key={feature.id} className="relative group mb-2">
+                    <button
+                      onClick={() => {
+                        setShowSidebar(false);
+                        if (typeof onModeSelect === 'function') onModeSelect('tool');
+                        if (typeof window !== 'undefined' && window.onFeatureSelect) window.onFeatureSelect(feature.id);
+                      }}
+                      className="p-2 rounded hover:bg-gray-200 focus:outline-none"
+                      aria-label={feature.label}
                     >
-                      <option value="">Choose a space...</option>
-                      {spaces.map(space => (
-                        <option key={space.key} value={space.key}>{space.name} ({space.key})</option>
-                      ))}
-                    </select>
-                    <ChevronDown className="absolute right-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+                      <Icon className="w-6 h-6 text-gray-700" />
+                    </button>
+                    <span className="absolute left-full top-1/2 -translate-y-1/2 ml-2 px-2 py-1 bg-gray-800 text-white text-xs rounded opacity-0 group-hover:opacity-100 pointer-events-none whitespace-nowrap">
+                      {feature.label}
+                    </span>
                   </div>
-                </div>
-                {/* Page Selection */}
-                <div className="mb-4">
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Select Pages to Analyze
-                  </label>
-                  <div className="space-y-2 max-h-40 overflow-y-auto border border-white/30 rounded-lg p-2 bg-white/50 backdrop-blur-sm">
-                    {pages.map(page => (
-                      <label key={page} className="flex items-center space-x-2 p-2 hover:bg-white/30 rounded cursor-pointer backdrop-blur-sm">
-                        <input
-                          type="checkbox"
-                          checked={selectedPages.includes(page)}
-                          onChange={(e) => {
-                            if (e.target.checked) {
-                              setSelectedPages([...selectedPages, page]);
-                            } else {
-                              setSelectedPages(selectedPages.filter(p => p !== page));
-                            }
-                          }}
-                          className="rounded border-gray-300 text-orange-500 focus:ring-orange-500"
-                        />
-                        <span className="text-sm text-gray-700">{page}</span>
-                      </label>
-                    ))}
-                  </div>
-                  <p className="text-sm text-gray-500 mt-1">
-                    {selectedPages.length} page(s) selected
-                  </p>
-                </div>
-                <div className="flex items-center space-x-2 mb-2">
-                  <input
-                    type="checkbox"
-                    checked={selectAllPages}
-                    onChange={() => {
-                      if (selectAllPages) {
-                        setSelectedPages([]);
-                      } else {
-                        setSelectedPages([...pages]);
-                      }
-                      setSelectAllPages(!selectAllPages);
-                    }}
-                    className="rounded border-gray-300 text-orange-500 focus:ring-orange-500"
-                  />
-                  <span className="text-sm text-gray-700 font-medium">Select All Pages</span>
-                </div>
-                {selectedSpace && selectedPages.length === 1 && (
-                  <div className="mb-4 text-green-700 font-semibold">
-                    Auto-selected: Space <span className="font-bold">{spaces.find(s => s.key === selectedSpace)?.name || selectedSpace}</span> &nbsp;|&nbsp; Page <span className="font-bold">{selectedPages[0]}</span>
-                  </div>
-                )}
-                {error && <p className="text-red-500 text-sm mt-2">{error}</p>}
-              </div>
+                );
+              })}
             </div>
           )}
-
-          {/* Goal Input Section */}
-          {!planSteps.length && !isPlanning && (
-            <div className="max-w-4xl mx-auto">
-              <div className="bg-white/60 backdrop-blur-xl rounded-xl p-8 border border-white/20 shadow-lg text-center">
-                <h3 className="text-2xl font-bold text-gray-800 mb-6">What do you want the assistant to help you achieve?</h3>
-                <div className="relative">
-                  <textarea
-                    value={goal}
-                    onChange={(e) => setGoal(e.target.value)}
-                    placeholder="Describe your goal in detail... (e.g., 'Help me analyze our documentation structure and recommend improvements for better user experience')"
-                    className="w-full p-4 border-2 border-orange-200/50 rounded-xl focus:ring-2 focus:ring-orange-500 focus:border-orange-500 resize-none bg-white/70 backdrop-blur-sm text-lg"
-                    rows={4}
-                  />
-                  <button
-                    onClick={handleGoalSubmit}
-                    disabled={!goal.trim() || !selectedSpace || selectedPages.length === 0}
-                    className="absolute bottom-4 right-4 bg-orange-500/90 backdrop-blur-sm text-white p-3 rounded-lg hover:bg-orange-600 disabled:bg-gray-300 disabled:cursor-not-allowed flex items-center space-x-2 transition-colors border border-white/10"
-                  >
-                    <Send className="w-5 h-5" />
-                  </button>
-                </div>
-                {error && <p className="text-red-500 text-sm mt-4">{error}</p>}
-              </div>
-            </div>
-          )}
-
-          {/* Planning Phase */}
-          {isPlanning && (
-            <div className="max-w-4xl mx-auto">
-              <div className="bg-white/60 backdrop-blur-xl rounded-xl p-8 border border-white/20 shadow-lg text-center">
-                <div className="flex items-center justify-center space-x-3 mb-4">
-                  <Brain className="w-8 h-8 text-orange-500 animate-pulse" />
-                  <h3 className="text-xl font-bold text-gray-800">Planning steps...</h3>
-                </div>
-                <div className="flex items-center justify-center space-x-4 text-gray-600">
-                  <span>1. Retrieve context</span>
-                  <span>→</span>
-                  <span>2. Summarize</span>
-                  <span>→</span>
-                  <span>3. Recommend changes</span>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Execution Phase */}
-          {planSteps.length > 0 && (
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              {/* Left Column - Progress Timeline */}
-              <div className="lg:col-span-1">
-                <div className="bg-white/60 backdrop-blur-xl rounded-xl p-4 border border-white/20 shadow-lg">
-                  <h3 className="font-semibold text-gray-800 mb-4">Live Progress Log</h3>
-                  <div className="space-y-4">
-                    {planSteps.map((step, index) => (
-                      <div key={step.id} className="flex items-start space-x-3">
-                        <div className="flex-shrink-0 mt-1">
-                          {step.status === 'completed' ? (
-                            <CheckCircle className="w-5 h-5 text-green-500" />
-                          ) : step.status === 'running' ? (
-                            <Loader2 className="w-5 h-5 text-orange-500 animate-spin" />
-                          ) : (
-                            <div className="w-5 h-5 border-2 border-gray-300 rounded-full" />
-                          )}
-                        </div>
-                        <div className="flex-1">
-                          <div className="font-medium text-gray-800">{step.title}</div>
-                          {step.details && (
-                            <div className="text-sm text-gray-600 mt-1">{step.details}</div>
-                          )}
-                        </div>
+          {/* Main Content (rest of AgentMode UI) */}
+          <div className="flex-1">
+            <div className="p-6 overflow-y-auto max-h-[calc(90vh-200px)]">
+              {/* Auto-detected Space and Page Info */}
+              {!planSteps.length && !isPlanning && (
+                <div className="max-w-4xl mx-auto mb-6">
+                  <div className="bg-white/60 backdrop-blur-xl rounded-xl p-6 border border-white/20 shadow-lg text-center">
+                    <h3 className="text-xl font-bold text-gray-800 mb-4">Detected Confluence Context</h3>
+                    {selectedSpace && selectedPages.length === 1 && (
+                      <div className="mb-4 text-green-700 font-semibold">
+                        Auto-selected: Space <span className="font-bold">{spaces.find(s => s.key === selectedSpace)?.name || selectedSpace}</span> &nbsp;|&nbsp; Page <span className="font-bold">{selectedPages[0]}</span>
                       </div>
-                    ))}
+                    )}
+                    {error && <p className="text-red-500 text-sm mt-2">{error}</p>}
                   </div>
-                  
-                  {/* Progress Bar */}
-                  <div className="mt-6">
-                    <div className="flex items-center justify-between text-sm text-gray-600 mb-2">
-                      <span>Progress</span>
-                      <span>{progressPercent}%</span>
-                    </div>
-                    <div className="w-full bg-gray-200 rounded-full h-2">
-                      <div 
-                        className="bg-orange-500 h-2 rounded-full transition-all duration-500"
-                        style={{ width: `${progressPercent}%` }}
+                </div>
+              )}
+
+              {/* Goal Input Section */}
+              {!planSteps.length && !isPlanning && (
+                <div className="max-w-4xl mx-auto">
+                  <div className="bg-white/60 backdrop-blur-xl rounded-xl p-8 border border-white/20 shadow-lg text-center">
+                    <h3 className="text-2xl font-bold text-gray-800 mb-6">What do you want the assistant to help you achieve?</h3>
+                    <div className="relative">
+                      <textarea
+                        value={goal}
+                        onChange={(e) => setGoal(e.target.value)}
+                        placeholder="Describe your goal in detail... (e.g., 'Help me analyze our documentation structure and recommend improvements for better user experience')"
+                        className="w-full p-4 border-2 border-orange-200/50 rounded-xl focus:ring-2 focus:ring-orange-500 focus:border-orange-500 resize-none bg-white/70 backdrop-blur-sm text-lg"
+                        rows={4}
                       />
+                      <button
+                        onClick={handleGoalSubmit}
+                        disabled={!goal.trim() || !selectedSpace || selectedPages.length === 0}
+                        className="absolute bottom-4 right-4 bg-orange-500/90 backdrop-blur-sm text-white p-3 rounded-lg hover:bg-orange-600 disabled:bg-gray-300 disabled:cursor-not-allowed flex items-center space-x-2 transition-colors border border-white/10"
+                      >
+                        <Send className="w-5 h-5" />
+                      </button>
+                    </div>
+                    {error && <p className="text-red-500 text-sm mt-4">{error}</p>}
+                  </div>
+                </div>
+              )}
+
+              {/* Planning Phase */}
+              {isPlanning && (
+                <div className="max-w-4xl mx-auto">
+                  <div className="bg-white/60 backdrop-blur-xl rounded-xl p-8 border border-white/20 shadow-lg text-center">
+                    <div className="flex items-center justify-center space-x-3 mb-4">
+                      <Brain className="w-8 h-8 text-orange-500 animate-pulse" />
+                      <h3 className="text-xl font-bold text-gray-800">Planning steps...</h3>
+                    </div>
+                    <div className="flex items-center justify-center space-x-4 text-gray-600">
+                      <span>1. Retrieve context</span>
+                      <span>→</span>
+                      <span>2. Summarize</span>
+                      <span>→</span>
+                      <span>3. Recommend changes</span>
                     </div>
                   </div>
                 </div>
-              </div>
+              )}
 
-              {/* Right Columns - Output Tabs */}
-              <div className="lg:col-span-2">
-                {outputTabs.length > 0 && (
-                  <div className="bg-white/60 backdrop-blur-xl rounded-xl border border-white/20 shadow-lg overflow-hidden">
-                    {/* Tab Headers */}
-                    <div className="border-b border-white/20 bg-white/40 backdrop-blur-sm">
-                      <div className="flex overflow-x-auto">
-                        {outputTabs.map(tab => {
-                          const Icon = tab.icon;
-                          return (
-                            <button
-                              key={tab.id}
-                              onClick={() => setActiveTab(tab.id)}
-                              className={`flex items-center space-x-2 px-4 py-3 border-b-2 transition-colors whitespace-nowrap ${
-                                activeTab === tab.id
-                                  ? 'border-orange-500 text-orange-600 bg-white/50'
-                                  : 'border-transparent text-gray-600 hover:text-gray-800 hover:bg-white/30'
-                              }`}
-                            >
-                              <Icon className="w-4 h-4" />
-                              <span className="text-sm font-medium">{tab.label}</span>
-                            </button>
-                          );
-                        })}
+              {/* Execution Phase */}
+              {planSteps.length > 0 && (
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                  {/* Left Column - Progress Timeline */}
+                  <div className="lg:col-span-1">
+                    <div className="bg-white/60 backdrop-blur-xl rounded-xl p-4 border border-white/20 shadow-lg">
+                      <h3 className="font-semibold text-gray-800 mb-4">Live Progress Log</h3>
+                      <div className="space-y-4">
+                        {planSteps.map((step, index) => (
+                          <div key={step.id} className="flex items-start space-x-3">
+                            <div className="flex-shrink-0 mt-1">
+                              {step.status === 'completed' ? (
+                                <CheckCircle className="w-5 h-5 text-green-500" />
+                              ) : step.status === 'running' ? (
+                                <Loader2 className="w-5 h-5 text-orange-500 animate-spin" />
+                              ) : (
+                                <div className="w-5 h-5 border-2 border-gray-300 rounded-full" />
+                              )}
+                            </div>
+                            <div className="flex-1">
+                              <div className="font-medium text-gray-800">{step.title}</div>
+                              {step.details && (
+                                <div className="text-sm text-gray-600 mt-1">{step.details}</div>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                      
+                      {/* Progress Bar */}
+                      <div className="mt-6">
+                        <div className="flex items-center justify-between text-sm text-gray-600 mb-2">
+                          <span>Progress</span>
+                          <span>{progressPercent}%</span>
+                        </div>
+                        <div className="w-full bg-gray-200 rounded-full h-2">
+                          <div 
+                            className="bg-orange-500 h-2 rounded-full transition-all duration-500"
+                            style={{ width: `${progressPercent}%` }}
+                          />
+                        </div>
                       </div>
                     </div>
+                  </div>
 
-                    {/* Tab Content */}
-                    <div className="p-6">
-                      {outputTabs.find(tab => tab.id === activeTab) && (
-                        <div className="prose prose-sm max-w-none">
-                          {activeTab === 'qa' ? (
-                            <div>
-                              <div className="whitespace-pre-wrap text-gray-700 mb-4">
-                                {outputTabs.find(tab => tab.id === activeTab)?.content}
-                              </div>
-                              {showFollowUp && (
-                                <div className="border-t border-white/20 pt-4">
-                                  <div className="flex space-x-2">
-                                    <input
-                                      type="text"
-                                      value={followUpQuestion}
-                                      onChange={(e) => setFollowUpQuestion(e.target.value)}
-                                      placeholder="Ask a follow-up question..."
-                                      className="flex-1 p-3 border border-white/30 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 bg-white/70 backdrop-blur-sm"
-                                      onKeyPress={(e) => e.key === 'Enter' && handleFollowUp()}
-                                    />
-                                    <button
-                                      onClick={handleFollowUp}
-                                      disabled={!followUpQuestion.trim() || !selectedSpace || selectedPages.length === 0}
-                                      className="px-4 py-3 bg-orange-500/90 backdrop-blur-sm text-white rounded-lg hover:bg-orange-600 disabled:bg-gray-300 transition-colors flex items-center border border-white/10"
-                                    >
-                                      <Plus className="w-4 h-4" />
-                                    </button>
+                  {/* Right Columns - Output Tabs */}
+                  <div className="lg:col-span-2">
+                    {outputTabs.length > 0 && (
+                      <div className="bg-white/60 backdrop-blur-xl rounded-xl border border-white/20 shadow-lg overflow-hidden">
+                        {/* Tab Headers */}
+                        <div className="border-b border-white/20 bg-white/40 backdrop-blur-sm">
+                          <div className="flex overflow-x-auto">
+                            {outputTabs.map(tab => {
+                              const Icon = tab.icon;
+                              return (
+                                <button
+                                  key={tab.id}
+                                  onClick={() => setActiveTab(tab.id)}
+                                  className={`flex items-center space-x-2 px-4 py-3 border-b-2 transition-colors whitespace-nowrap ${
+                                    activeTab === tab.id
+                                      ? 'border-orange-500 text-orange-600 bg-white/50'
+                                      : 'border-transparent text-gray-600 hover:text-gray-800 hover:bg-white/30'
+                                  }`}
+                                >
+                                  <Icon className="w-4 h-4" />
+                                  <span className="text-sm font-medium">{tab.label}</span>
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+
+                        {/* Tab Content */}
+                        <div className="p-6">
+                          {outputTabs.find(tab => tab.id === activeTab) && (
+                            <div className="prose prose-sm max-w-none">
+                              {activeTab === 'qa' ? (
+                                <div>
+                                  <div className="whitespace-pre-wrap text-gray-700 mb-4">
+                                    {outputTabs.find(tab => tab.id === activeTab)?.content}
                                   </div>
+                                  {showFollowUp && (
+                                    <div className="border-t border-white/20 pt-4">
+                                      <div className="flex space-x-2">
+                                        <input
+                                          type="text"
+                                          value={followUpQuestion}
+                                          onChange={(e) => setFollowUpQuestion(e.target.value)}
+                                          placeholder="Ask a follow-up question..."
+                                          className="flex-1 p-3 border border-white/30 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 bg-white/70 backdrop-blur-sm"
+                                          onKeyPress={(e) => e.key === 'Enter' && handleFollowUp()}
+                                        />
+                                        <button
+                                          onClick={handleFollowUp}
+                                          disabled={!followUpQuestion.trim() || !selectedSpace || selectedPages.length === 0}
+                                          className="px-4 py-3 bg-orange-500/90 backdrop-blur-sm text-white rounded-lg hover:bg-orange-600 disabled:bg-gray-300 transition-colors flex items-center border border-white/10"
+                                        >
+                                          <Plus className="w-4 h-4" />
+                                        </button>
+                                      </div>
+                                    </div>
+                                  )}
+                                </div>
+                              ) : (
+                                <div className="whitespace-pre-wrap text-gray-700">
+                                  {outputTabs.find(tab => tab.id === activeTab)?.content.split('\n').map((line, index) => {
+                                    if (line.startsWith('### ')) {
+                                      return <h3 key={index} className="text-lg font-bold text-gray-800 mt-4 mb-2">{line.substring(4)}</h3>;
+                                    } else if (line.startsWith('## ')) {
+                                      return <h2 key={index} className="text-xl font-bold text-gray-800 mt-6 mb-3">{line.substring(3)}</h2>;
+                                    } else if (line.startsWith('# ')) {
+                                      return <h1 key={index} className="text-2xl font-bold text-gray-800 mt-8 mb-4">{line.substring(2)}</h1>;
+                                    } else if (line.startsWith('- **')) {
+                                      const match = line.match(/- \*\*(.*?)\*\*: (.*)/);
+                                      if (match) {
+                                        return <p key={index} className="mb-2"><strong>{match[1]}:</strong> {match[2]}</p>;
+                                      }
+                                    } else if (line.startsWith('- ')) {
+                                      return <p key={index} className="mb-1 ml-4"> 2 {line.substring(2)}</p>;
+                                    } else if (line.trim()) {
+                                      return <p key={index} className="mb-2 text-gray-700">{line}</p>;
+                                    }
+                                    return <br key={index} />;
+                                  })}
                                 </div>
                               )}
                             </div>
-                          ) : (
-                            <div className="whitespace-pre-wrap text-gray-700">
-                              {outputTabs.find(tab => tab.id === activeTab)?.content.split('\n').map((line, index) => {
-                                if (line.startsWith('### ')) {
-                                  return <h3 key={index} className="text-lg font-bold text-gray-800 mt-4 mb-2">{line.substring(4)}</h3>;
-                                } else if (line.startsWith('## ')) {
-                                  return <h2 key={index} className="text-xl font-bold text-gray-800 mt-6 mb-3">{line.substring(3)}</h2>;
-                                } else if (line.startsWith('# ')) {
-                                  return <h1 key={index} className="text-2xl font-bold text-gray-800 mt-8 mb-4">{line.substring(2)}</h1>;
-                                } else if (line.startsWith('- **')) {
-                                  const match = line.match(/- \*\*(.*?)\*\*: (.*)/);
-                                  if (match) {
-                                    return <p key={index} className="mb-2"><strong>{match[1]}:</strong> {match[2]}</p>;
-                                  }
-                                } else if (line.startsWith('- ')) {
-                                  return <p key={index} className="mb-1 ml-4"> 2 {line.substring(2)}</p>;
-                                } else if (line.trim()) {
-                                  return <p key={index} className="mb-2 text-gray-700">{line}</p>;
-                                }
-                                return <br key={index} />;
-                              })}
-                            </div>
                           )}
                         </div>
-                      )}
-                    </div>
+                      </div>
+                    )}
                   </div>
-                )}
-              </div>
-            </div>
-          )}
+                </div>
+              )}
 
-          {/* Actions */}
-          {planSteps.length > 0 && !isPlanning && !isExecuting && (
-            <div className="flex justify-end mt-8 space-x-4">
-              <button
-                onClick={exportPlan}
-                className="px-6 py-3 bg-orange-500/90 text-white rounded-lg hover:bg-orange-600 transition-colors font-semibold shadow-md border border-white/10"
-              >
-                <Download className="w-5 h-5 inline-block mr-2" />
-                Export Plan
-              </button>
-              <button
-                onClick={replaySteps}
-                className="px-6 py-3 bg-white/80 text-orange-600 rounded-lg hover:bg-orange-100 transition-colors font-semibold shadow-md border border-orange-200/50"
-              >
-                <RotateCcw className="w-5 h-5 inline-block mr-2" />
-                Replay Steps
-              </button>
+              {/* Actions */}
+              {planSteps.length > 0 && !isPlanning && !isExecuting && (
+                <div className="flex justify-end mt-8 space-x-4">
+                  <button
+                    onClick={exportPlan}
+                    className="px-6 py-3 bg-orange-500/90 text-white rounded-lg hover:bg-orange-600 transition-colors font-semibold shadow-md border border-white/10"
+                  >
+                    <Download className="w-5 h-5 inline-block mr-2" />
+                    Export Plan
+                  </button>
+                  <button
+                    onClick={replaySteps}
+                    className="px-6 py-3 bg-white/80 text-orange-600 rounded-lg hover:bg-orange-100 transition-colors font-semibold shadow-md border border-orange-200/50"
+                  >
+                    <RotateCcw className="w-5 h-5 inline-block mr-2" />
+                    Replay Steps
+                  </button>
+                </div>
+              )}
             </div>
-          )}
+          </div>
         </div>
       </div>
     </div>

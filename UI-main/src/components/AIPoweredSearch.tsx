@@ -32,7 +32,6 @@ const AIPoweredSearch: React.FC<AIPoweredSearchProps> = ({
   const [pages, setPages] = useState<string[]>([]);
   const [error, setError] = useState('');
   const [showToast, setShowToast] = useState(false);
-  const [sidebarOpen, setSidebarOpen] = useState(false);
 
   const toggleSelectAllPages = () => {
     if (selectAllPages) {
@@ -152,324 +151,277 @@ const AIPoweredSearch: React.FC<AIPoweredSearchProps> = ({
 
   return (
     <div className="fixed inset-0 bg-white flex items-center justify-center z-40 p-4">
-      <div className="bg-white/80 backdrop-blur-xl border-2 border-[#DFE1E6] rounded-2xl w-full max-w-7xl max-h-[90vh] overflow-hidden relative">
-        {/* Sidebar Trigger Icon */}
-        <button
-          className="absolute left-4 top-6 z-50 flex items-center justify-center w-10 h-10 bg-white/80 border border-white/30 rounded-full shadow hover:bg-white"
-          onClick={() => setSidebarOpen(true)}
-          title="Open Tool Sidebar"
-          style={{ outline: 'none' }}
-        >
-          <svg width="24" height="24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-layout-sidebar w-6 h-6 text-confluence-blue"><rect width="20" height="20" x="2" y="2" rx="2"/><path d="M9 2v20"/></svg>
-        </button>
-        {/* Sidebar */}
-        {sidebarOpen && (
-          <div className="absolute left-0 top-0 h-full w-20 bg-white/90 border-r border-white/30 shadow-xl z-40 flex flex-col items-center pt-16" style={{ minHeight: '100%' }}>
-            <button
-              className="mb-8 mt-2 p-2 rounded-full hover:bg-gray-200"
-              onClick={() => setSidebarOpen(false)}
-              title="Close Sidebar"
-            >
-              <X className="w-6 h-6 text-gray-500" />
-            </button>
-            {features.map((feature) => {
-              const Icon = feature.icon;
-              return (
-                <div key={feature.id} className="mb-6 group flex flex-col items-center">
-                  <button
-                    onClick={() => { onFeatureSelect(feature.id); setSidebarOpen(false); }}
-                    className={`p-3 rounded-full hover:bg-confluence-blue/10 focus:outline-none flex items-center justify-center ${feature.id === 'search' ? 'bg-confluence-blue/10' : ''}`}
-                    title={feature.label}
-                  >
-                    <Icon className="w-7 h-7 text-confluence-blue" />
-                  </button>
-                  <span className="mt-2 text-xs text-gray-700 bg-white/90 px-2 py-1 rounded shadow opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap">
-                    {feature.label}
-                  </span>
-                </div>
-              );
-            })}
-          </div>
-        )}
-        {/* Main Content */}
-        <div className="bg-white/80 backdrop-blur-xl border-2 border-[#DFE1E6] rounded-2xl w-full max-w-7xl max-h-[90vh] overflow-hidden">
-          {/* Header */}
-          <div className="bg-gradient-to-r from-confluence-blue/90 to-confluence-light-blue/90 backdrop-blur-xl p-6 text-white border-b border-white/10">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center space-x-3">
-                <Search className="w-8 h-8" />
-                <div>
-                  <h2 className="text-2xl font-bold">Confluence AI Assistant</h2>
-                  <p className="text-blue-100/90">AI-powered tools for your Confluence workspace</p>
-                </div>
-              </div>
-              <div className="flex items-center space-x-2">
-                <button 
-                  onClick={() => onModeSelect('agent')}
-                  className="text-blue-100 hover:text-white hover:bg-white/10 rounded-lg px-3 py-1 text-sm transition-colors"
-                >
-                  Switch to Agent Mode
-                </button>
-                <button onClick={onClose} className="text-white hover:bg-white/10 rounded-full p-2 backdrop-blur-sm">
-                  <X className="w-6 h-6" />
-                </button>
+      <div className="bg-white/80 backdrop-blur-xl border-2 border-[#DFE1E6] rounded-2xl w-full max-w-7xl max-h-[90vh] overflow-hidden">
+        {/* Header */}
+        <div className="bg-gradient-to-r from-confluence-blue/90 to-confluence-light-blue/90 backdrop-blur-xl p-6 text-white border-b border-white/10">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-3">
+              <Search className="w-8 h-8" />
+              <div>
+                <h2 className="text-2xl font-bold">Confluence AI Assistant</h2>
+                <p className="text-blue-100/90">AI-powered tools for your Confluence workspace</p>
               </div>
             </div>
-            
-            {/* Feature Navigation */}
-            <div className="mt-6 relative">
-              <CustomScrollbar className="pb-2">
-                <div className="flex gap-2">
-                  {features.map((feature) => {
-                    const Icon = feature.icon;
-                    const isActive = feature.id === 'search';
-                    
-                    return (
-                      <button
-                        key={feature.id}
-                        onClick={() => onFeatureSelect(feature.id)}
-                        className={`flex items-center space-x-2 px-4 py-2 rounded-lg backdrop-blur-sm border transition-all duration-200 whitespace-nowrap flex-shrink-0 ${
-                          isActive
-                            ? 'bg-white/90 text-confluence-blue shadow-lg border-white/30'
-                            : 'bg-white/10 text-white hover:bg-white/20 border-white/10'
-                        }`}
-                      >
-                        <Icon className="w-4 h-4" />
-                        <span className="text-sm font-medium">{feature.label}</span>
-                      </button>
-                    );
-                  })}
-                </div>
-              </CustomScrollbar>
+            <div className="flex items-center space-x-2">
+              <button 
+                onClick={() => onModeSelect('agent')}
+                className="text-blue-100 hover:text-white hover:bg-white/10 rounded-lg px-3 py-1 text-sm transition-colors"
+              >
+                Switch to Agent Mode
+              </button>
+              <button onClick={onClose} className="text-white hover:bg-white/10 rounded-full p-2 backdrop-blur-sm">
+                <X className="w-6 h-6" />
+              </button>
             </div>
           </div>
-
-          <div className="p-6 overflow-y-auto max-h-[calc(90vh-200px)]">
-            {error && (
-              <div className="mb-4 p-4 bg-red-100 border border-red-400 text-red-700 rounded-lg">
-                {error}
-              </div>
-            )}
-
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              {/* Left Column - Search Configuration */}
-              <div className="space-y-6">
-                <div className="bg-white/60 backdrop-blur-xl rounded-xl p-4 border border-white/20 shadow-lg">
-                  <h3 className="font-semibold text-gray-800 mb-4 flex items-center">
-                    <Settings className="w-5 h-5 mr-2" />
-                    Search Configuration
-                  </h3>
+          
+          {/* Feature Navigation */}
+          <div className="mt-6 relative">
+            <CustomScrollbar className="pb-2">
+              <div className="flex gap-2">
+                {features.map((feature) => {
+                  const Icon = feature.icon;
+                  const isActive = feature.id === 'search';
                   
-                  {/* Space Selection */}
-                  <div className="mb-4">
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Select Confluence Space
-                    </label>
-                    <div className="relative">
-                      <select
-                        value={selectedSpace}
-                        onChange={(e) => setSelectedSpace(e.target.value)}
-                        className="w-full p-3 border border-white/30 rounded-lg focus:ring-2 focus:ring-confluence-blue focus:border-confluence-blue appearance-none bg-white/70 backdrop-blur-sm"
-                      >
-                        <option value="">Choose a space...</option>
-                        {spaces.map(space => (
-                          <option key={space.key} value={space.key}>{space.name} ({space.key})</option>
-                        ))}
-                      </select>
-                      <ChevronDown className="absolute right-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
-                    </div>
-                  </div>
+                  return (
+                    <button
+                      key={feature.id}
+                      onClick={() => onFeatureSelect(feature.id)}
+                      className={`flex items-center space-x-2 px-4 py-2 rounded-lg backdrop-blur-sm border transition-all duration-200 whitespace-nowrap flex-shrink-0 ${
+                        isActive
+                          ? 'bg-white/90 text-confluence-blue shadow-lg border-white/30'
+                          : 'bg-white/10 text-white hover:bg-white/20 border-white/10'
+                      }`}
+                    >
+                      <Icon className="w-4 h-4" />
+                      <span className="text-sm font-medium">{feature.label}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </CustomScrollbar>
+          </div>
+        </div>
 
-                  {/* Page Selection */}
-                  <div className="mb-4">
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Select Pages to Analyze
-                    </label>
+        <div className="p-6 overflow-y-auto max-h-[calc(90vh-200px)]">
+          {error && (
+            <div className="mb-4 p-4 bg-red-100 border border-red-400 text-red-700 rounded-lg">
+              {error}
+            </div>
+          )}
 
-                    <div className="space-y-2 max-h-40 overflow-y-auto border border-white/30 rounded-lg p-2 bg-white/50 backdrop-blur-sm">
-                      {pages.map(page => (
-                        <label key={page} className="flex items-center space-x-2 p-2 hover:bg-white/30 rounded cursor-pointer backdrop-blur-sm">
-                          <input
-                            type="checkbox"
-                            checked={selectedPages.includes(page)}
-                            onChange={(e) => {
-                              if (e.target.checked) {
-                                setSelectedPages([...selectedPages, page]);
-                              } else {
-                                setSelectedPages(selectedPages.filter(p => p !== page));
-                              }
-                            }}
-                            className="rounded border-gray-300 text-confluence-blue focus:ring-confluence-blue"
-                          />
-                          <span className="text-sm text-gray-700">{page}</span>
-                        </label>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* Left Column - Search Configuration */}
+            <div className="space-y-6">
+              <div className="bg-white/60 backdrop-blur-xl rounded-xl p-4 border border-white/20 shadow-lg">
+                <h3 className="font-semibold text-gray-800 mb-4 flex items-center">
+                  <Settings className="w-5 h-5 mr-2" />
+                  Search Configuration
+                </h3>
+                
+                {/* Space Selection */}
+                <div className="mb-4">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Select Confluence Space
+                  </label>
+                  <div className="relative">
+                    <select
+                      value={selectedSpace}
+                      onChange={(e) => setSelectedSpace(e.target.value)}
+                      className="w-full p-3 border border-white/30 rounded-lg focus:ring-2 focus:ring-confluence-blue focus:border-confluence-blue appearance-none bg-white/70 backdrop-blur-sm"
+                    >
+                      <option value="">Choose a space...</option>
+                      {spaces.map(space => (
+                        <option key={space.key} value={space.key}>{space.name} ({space.key})</option>
                       ))}
-                    </div>
-                    <p className="text-sm text-gray-500 mt-1">
-                      {selectedPages.length} page(s) selected
-                    </p>
+                    </select>
+                    <ChevronDown className="absolute right-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
                   </div>
-                 <div className="flex items-center space-x-2 mb-2">
+                </div>
+
+                {/* Page Selection */}
+                <div className="mb-4">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Select Pages to Analyze
+                  </label>
+
+                  <div className="space-y-2 max-h-40 overflow-y-auto border border-white/30 rounded-lg p-2 bg-white/50 backdrop-blur-sm">
+                    {pages.map(page => (
+                      <label key={page} className="flex items-center space-x-2 p-2 hover:bg-white/30 rounded cursor-pointer backdrop-blur-sm">
                         <input
                           type="checkbox"
-                          checked={selectAllPages}
-                          onChange={toggleSelectAllPages}
+                          checked={selectedPages.includes(page)}
+                          onChange={(e) => {
+                            if (e.target.checked) {
+                              setSelectedPages([...selectedPages, page]);
+                            } else {
+                              setSelectedPages(selectedPages.filter(p => p !== page));
+                            }
+                          }}
                           className="rounded border-gray-300 text-confluence-blue focus:ring-confluence-blue"
                         />
-                        <span className="text-sm text-gray-700 font-medium">Select All Pages</span>
-                    </div>
-                    <div className="h-4" />
-                    {/* Query Input */}
-                    <div className="mb-4">
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Your Question
+                        <span className="text-sm text-gray-700">{page}</span>
                       </label>
-                      <textarea
-                        value={query}
-                        onChange={(e) => setQuery(e.target.value)}
-                        placeholder="What would you like to know about the selected content?"
-                        className="w-full p-3 border border-white/30 rounded-lg focus:ring-2 focus:ring-confluence-blue focus:border-confluence-blue resize-none bg-white/70 backdrop-blur-sm"
-                        rows={4}
-                      />
-                    </div>
+                    ))}
+                  </div>
+                  <p className="text-sm text-gray-500 mt-1">
+                    {selectedPages.length} page(s) selected
+                  </p>
+                </div>
+               <div className="flex items-center space-x-2 mb-2">
+                    <input
+                      type="checkbox"
+                      checked={selectAllPages}
+                      onChange={toggleSelectAllPages}
+                      className="rounded border-gray-300 text-confluence-blue focus:ring-confluence-blue"
+                    />
+                    <span className="text-sm text-gray-700 font-medium">Select All Pages</span>
+                </div>
+                <div className="h-4" />
+                {/* Query Input */}
+                <div className="mb-4">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Your Question
+                  </label>
+                  <textarea
+                    value={query}
+                    onChange={(e) => setQuery(e.target.value)}
+                    placeholder="What would you like to know about the selected content?"
+                    className="w-full p-3 border border-white/30 rounded-lg focus:ring-2 focus:ring-confluence-blue focus:border-confluence-blue resize-none bg-white/70 backdrop-blur-sm"
+                    rows={4}
+                  />
+                </div>
 
-                    {/* Search Button */}
-                    <button
-                      onClick={handleSearch}
-                      disabled={!selectedSpace || selectedPages.length === 0 || !query.trim() || isLoading}
-                      className="w-full bg-confluence-blue/90 backdrop-blur-sm text-white py-3 px-4 rounded-lg hover:bg-confluence-blue disabled:bg-gray-300 disabled:cursor-not-allowed flex items-center justify-center space-x-2 transition-colors border border-white/10"
-                    >
-                      {isLoading ? (
-                        <>
-                          <Loader2 className="w-5 h-5 animate-spin" />
-                          <span>Generating AI Response...</span>
-                        </>
-                      ) : (
-                        <>
-                          <Search className="w-5 h-5" />
-                          <span>Generate AI Response</span>
-                        </>
-                      )}
-                    </button>
+                {/* Search Button */}
+                <button
+                  onClick={handleSearch}
+                  disabled={!selectedSpace || selectedPages.length === 0 || !query.trim() || isLoading}
+                  className="w-full bg-confluence-blue/90 backdrop-blur-sm text-white py-3 px-4 rounded-lg hover:bg-confluence-blue disabled:bg-gray-300 disabled:cursor-not-allowed flex items-center justify-center space-x-2 transition-colors border border-white/10"
+                >
+                  {isLoading ? (
+                    <>
+                      <Loader2 className="w-5 h-5 animate-spin" />
+                      <span>Generating AI Response...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Search className="w-5 h-5" />
+                      <span>Generate AI Response</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+
+            {/* Right Column - Results */}
+            <div className="space-y-6">
+              {response && (
+                <div className="bg-white/60 backdrop-blur-xl rounded-xl p-4 border border-white/20 shadow-lg">
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="font-semibold text-gray-800">AI Response</h3>
+                    <div className="flex items-center space-x-2">
+                      <button
+                        onClick={() => setShowRawContent(!showRawContent)}
+                        className="text-sm text-confluence-blue hover:underline"
+                      >
+                        {showRawContent ? 'Show Formatted' : 'Show Raw Content'}
+                      </button>
+                    </div>
+                  </div>
+                  
+                  <div className="bg-white/70 backdrop-blur-sm rounded-lg p-4 border border-white/20 max-h-80 overflow-y-auto">
+                    {showRawContent ? (
+                      <pre className="text-sm text-gray-700 whitespace-pre-wrap">{response}</pre>
+                    ) : (
+                      <div className="prose prose-sm max-w-none">
+                        {response.split('\n').map((line, index) => {
+                          if (line.startsWith('## ')) {
+                            return <h2 key={index} className="text-lg font-bold text-gray-800 mt-4 mb-2">{line.substring(3)}</h2>;
+                          } else if (line.startsWith('- **')) {
+                            const match = line.match(/- \*\*(.*?)\*\*: (.*)/);
+                            if (match) {
+                              return <p key={index} className="mb-2"><strong>{match[1]}:</strong> {match[2]}</p>;
+                            }
+                          } else if (line.startsWith('- ')) {
+                            return <p key={index} className="mb-1 ml-4">• {line.substring(2)}</p>;
+                          } else if (line.trim()) {
+                            return <p key={index} className="mb-2 text-gray-700">{line}</p>;
+                          }
+                          return <br key={index} />;
+                        })}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Export Options */}
+                  <div className="mt-4 space-y-3">
+                    <div className="flex items-center space-x-2">
+                      <label className="text-sm font-medium text-gray-700">Export Format:</label>
+                      <select
+                        value={exportFormat}
+                        onChange={(e) => setExportFormat(e.target.value)}
+                        className="px-3 py-1 border border-white/30 rounded text-sm focus:ring-2 focus:ring-confluence-blue bg-white/70 backdrop-blur-sm"
+                      >
+                        <option value="markdown">Markdown</option>
+                        <option value="pdf">PDF</option>
+                        <option value="docx">Word Document</option>
+                        <option value="txt">Plain Text</option>
+                      </select>
+                    </div>
+                    
+                    <div className="flex space-x-2">
+                      <button
+                        onClick={() => exportResponse(exportFormat)}
+                        className="flex items-center space-x-2 px-4 py-2 bg-green-600/90 backdrop-blur-sm text-white rounded-lg hover:bg-green-700 transition-colors border border-white/10"
+                      >
+                        <Download className="w-4 h-4" />
+                        <span>Export</span>
+                      </button>
+                      <button
+                        onClick={async () => {
+                          const { space, page } = getConfluenceSpaceAndPageFromUrl();
+                          if (!space || !page) {
+                            alert('Confluence space or page not specified in macro src URL.');
+                            return;
+                          }
+                          try {
+                            await apiService.saveToConfluence({
+                              space_key: space,
+                              page_title: page,
+                              content: response || '',
+                            });
+                            setShowToast(true);
+                            setTimeout(() => setShowToast(false), 3000);
+                          } catch (err: any) {
+                            alert('Failed to save to Confluence: ' + (err.message || err));
+                          }
+                        }}
+                        className="flex items-center space-x-2 px-4 py-2 bg-confluence-blue/90 backdrop-blur-sm text-white rounded-lg hover:bg-confluence-blue transition-colors border border-white/10"
+                      >
+                        <Save className="w-4 h-4" />
+                        <span>Save to Confluence</span>
+                      </button>
+                    </div>
                   </div>
                 </div>
+              )}
 
-                {/* Right Column - Results */}
-                <div className="space-y-6">
-                  {response && (
-                    <div className="bg-white/60 backdrop-blur-xl rounded-xl p-4 border border-white/20 shadow-lg">
-                      <div className="flex items-center justify-between mb-4">
-                        <h3 className="font-semibold text-gray-800">AI Response</h3>
-                        <div className="flex items-center space-x-2">
-                          <button
-                            onClick={() => setShowRawContent(!showRawContent)}
-                            className="text-sm text-confluence-blue hover:underline"
-                          >
-                            {showRawContent ? 'Show Formatted' : 'Show Raw Content'}
-                          </button>
-                        </div>
-                      </div>
-                      
-                      <div className="bg-white/70 backdrop-blur-sm rounded-lg p-4 border border-white/20 max-h-80 overflow-y-auto">
-                        {showRawContent ? (
-                          <pre className="text-sm text-gray-700 whitespace-pre-wrap">{response}</pre>
-                        ) : (
-                          <div className="prose prose-sm max-w-none">
-                            {response.split('\n').map((line, index) => {
-                              if (line.startsWith('## ')) {
-                                return <h2 key={index} className="text-lg font-bold text-gray-800 mt-4 mb-2">{line.substring(3)}</h2>;
-                              } else if (line.startsWith('- **')) {
-                                const match = line.match(/- \*\*(.*?)\*\*: (.*)/);
-                                if (match) {
-                                  return <p key={index} className="mb-2"><strong>{match[1]}:</strong> {match[2]}</p>;
-                                }
-                              } else if (line.startsWith('- ')) {
-                                return <p key={index} className="mb-1 ml-4">• {line.substring(2)}</p>;
-                              } else if (line.trim()) {
-                                return <p key={index} className="mb-2 text-gray-700">{line}</p>;
-                              }
-                              return <br key={index} />;
-                            })}
-                          </div>
-                        )}
-                      </div>
-
-                      {/* Export Options */}
-                      <div className="mt-4 space-y-3">
-                        <div className="flex items-center space-x-2">
-                          <label className="text-sm font-medium text-gray-700">Export Format:</label>
-                          <select
-                            value={exportFormat}
-                            onChange={(e) => setExportFormat(e.target.value)}
-                            className="px-3 py-1 border border-white/30 rounded text-sm focus:ring-2 focus:ring-confluence-blue bg-white/70 backdrop-blur-sm"
-                          >
-                            <option value="markdown">Markdown</option>
-                            <option value="pdf">PDF</option>
-                            <option value="docx">Word Document</option>
-                            <option value="txt">Plain Text</option>
-                          </select>
-                        </div>
-                        
-                        <div className="flex space-x-2">
-                          <button
-                            onClick={() => exportResponse(exportFormat)}
-                            className="flex items-center space-x-2 px-4 py-2 bg-green-600/90 backdrop-blur-sm text-white rounded-lg hover:bg-green-700 transition-colors border border-white/10"
-                          >
-                            <Download className="w-4 h-4" />
-                            <span>Export</span>
-                          </button>
-                          <button
-                            onClick={async () => {
-                              const { space, page } = getConfluenceSpaceAndPageFromUrl();
-                              if (!space || !page) {
-                                alert('Confluence space or page not specified in macro src URL.');
-                                return;
-                              }
-                              try {
-                                await apiService.saveToConfluence({
-                                  space_key: space,
-                                  page_title: page,
-                                  content: response || '',
-                                });
-                                setShowToast(true);
-                                setTimeout(() => setShowToast(false), 3000);
-                              } catch (err: any) {
-                                alert('Failed to save to Confluence: ' + (err.message || err));
-                              }
-                            }}
-                            className="flex items-center space-x-2 px-4 py-2 bg-confluence-blue/90 backdrop-blur-sm text-white rounded-lg hover:bg-confluence-blue transition-colors border border-white/10"
-                          >
-                            <Save className="w-4 h-4" />
-                            <span>Save to Confluence</span>
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-
-                  {!response && !isLoading && (
-                    <div className="bg-white/60 backdrop-blur-xl rounded-xl p-8 text-center border border-white/20 shadow-lg">
-                      <FileText className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-                      <h3 className="text-lg font-semibold text-gray-600 mb-2">Ready to Search</h3>
-                      <p className="text-gray-500">Configure your search parameters and click \"Generate AI Response\" to get started.</p>
-                    </div>
-                  )}
-                  {/* End of Results Column */}
+              {!response && !isLoading && (
+                <div className="bg-white/60 backdrop-blur-xl rounded-xl p-8 text-center border border-white/20 shadow-lg">
+                  <FileText className="w-16 h-16 text-gray-400 mx-auto mb-4" />
+                  <h3 className="text-lg font-semibold text-gray-600 mb-2">Ready to Search</h3>
+                  <p className="text-gray-500">Configure your search parameters and click "Generate AI Response" to get started.</p>
                 </div>
-                {/* End of Flex Row */}
-              </div>
-              {/* End of Main Card */}
+              )}
             </div>
-            {/* End of Centered Container */}
           </div>
-        )}
-        {showToast && (
-          <div style={{position: 'fixed', bottom: 40, left: '50%', transform: 'translateX(-50%)', background: '#2684ff', color: 'white', padding: '16px 32px', borderRadius: 8, zIndex: 9999, fontWeight: 600, fontSize: 16, boxShadow: '0 2px 12px rgba(0,0,0,0.15)'}}>
-            Saved to Confluence! Please refresh this Confluence page to see your changes.
-          </div>
-        )}
-      {/* Close main content, card, and root containers */}
+        </div>
       </div>
+      {showToast && (
+        <div style={{position: 'fixed', bottom: 40, left: '50%', transform: 'translateX(-50%)', background: '#2684ff', color: 'white', padding: '16px 32px', borderRadius: 8, zIndex: 9999, fontWeight: 600, fontSize: 16, boxShadow: '0 2px 12px rgba(0,0,0,0.15)'}}>
+          Saved to Confluence! Please refresh this Confluence page to see your changes.
+        </div>
+      )}
     </div>
   );
 };

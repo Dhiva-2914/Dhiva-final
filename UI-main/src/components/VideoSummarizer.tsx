@@ -109,10 +109,6 @@ const VideoSummarizer: React.FC<VideoSummarizerProps> = ({ onClose, onFeatureSel
     );
   };
 
-  const selectAllPages = () => {
-    setSelectedPages(pages);
-  };
-
   const clearAllPages = () => {
     setSelectedPages([]);
   };

@@ -63,7 +63,7 @@ function App() {
   const handleModeSelect = (mode: AppMode) => {
     setAppMode(mode);
     if (mode === 'tool') {
-      setActiveFeature('search'); // Default to search for tool mode
+      setActiveTool('search'); // Ensure tool mode always starts with a tool selected
     }
   };
 

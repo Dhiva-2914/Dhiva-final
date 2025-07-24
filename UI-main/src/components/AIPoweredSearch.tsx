@@ -451,20 +451,25 @@ const AIPoweredSearch: React.FC<AIPoweredSearchProps> = ({
                     <div className="bg-white/60 backdrop-blur-xl rounded-xl p-8 text-center border border-white/20 shadow-lg">
                       <FileText className="w-16 h-16 text-gray-400 mx-auto mb-4" />
                       <h3 className="text-lg font-semibold text-gray-600 mb-2">Ready to Search</h3>
-                      <p className="text-gray-500">Configure your search parameters and click "Generate AI Response" to get started.</p>
+                      <p className="text-gray-500">Configure your search parameters and click \"Generate AI Response\" to get started.</p>
                     </div>
                   )}
+                {/* End of Results Column */}
                 </div>
+              {/* End of Flex Row */}
               </div>
+            {/* End of Main Card */}
             </div>
+          {/* End of Centered Container */}
           </div>
-        </div>
-      )}
-      {showToast && (
-        <div style={{position: 'fixed', bottom: 40, left: '50%', transform: 'translateX(-50%)', background: '#2684ff', color: 'white', padding: '16px 32px', borderRadius: 8, zIndex: 9999, fontWeight: 600, fontSize: 16, boxShadow: '0 2px 12px rgba(0,0,0,0.15)'}}>
-          Saved to Confluence! Please refresh this Confluence page to see your changes.
-        </div>
-      )}
+        )}
+        {showToast && (
+          <div style={{position: 'fixed', bottom: 40, left: '50%', transform: 'translateX(-50%)', background: '#2684ff', color: 'white', padding: '16px 32px', borderRadius: 8, zIndex: 9999, fontWeight: 600, fontSize: 16, boxShadow: '0 2px 12px rgba(0,0,0,0.15)'}}>
+            Saved to Confluence! Please refresh this Confluence page to see your changes.
+          </div>
+        )}
+      {/* Close main content, card, and root containers */}
+      </div>
     </div>
   );
 };

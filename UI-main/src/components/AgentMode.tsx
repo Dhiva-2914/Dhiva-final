@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Zap, X, Send, Download, RotateCcw, FileText, Brain, CheckCircle, Loader2, MessageSquare, Plus } from 'lucide-react';
+import { Zap, X, Send, Download, RotateCcw, FileText, Brain, CheckCircle, Loader2, MessageSquare, Plus, ChevronDown } from 'lucide-react';
 import type { AppMode } from '../App';
 import { apiService, analyzeGoal } from '../services/api';
 import { getConfluenceSpaceAndPageFromUrl } from '../utils/urlUtils';
@@ -25,6 +25,22 @@ interface OutputTab {
   content: string;
 }
 
+// Add helper to determine intent and content type
+const determineToolByIntentAndContent = async (goal: string, space: string, page: string) => {
+  // Heuristic intent detection
+  const lowerGoal = goal.toLowerCase();
+  // Fallback to 'text' content type (no backend support for content type detection)
+  let contentType = 'text';
+  // Intent-based routing
+  if (/impact|change|difference|diff/.test(lowerGoal)) return 'impact_analyzer';
+  if (/test|qa|test case|unit test/.test(lowerGoal)) return 'test_support';
+  if (/convert|debug|refactor|fix|bug|error/.test(lowerGoal)) return 'code_assistant';
+  if (/video|summarize.*video|transcribe/.test(lowerGoal)) return 'video_summarizer';
+  if (/image|chart|diagram|visual/.test(lowerGoal)) return 'image_insights';
+  // Default
+  return 'ai_powered_search';
+};
+
 const AgentMode: React.FC<AgentModeProps> = ({ onClose, onModeSelect, autoSpaceKey, isSpaceAutoConnected }) => {
   const [goal, setGoal] = useState('');
   const [isPlanning, setIsPlanning] = useState(false);
@@ -42,6 +58,7 @@ const AgentMode: React.FC<AgentModeProps> = ({ onClose, onModeSelect, autoSpaceK
   const [selectedSpace, setSelectedSpace] = useState('');
   const [selectedPages, setSelectedPages] = useState<string[]>([]);
   const [error, setError] = useState('');
+  const [selectAllPages, setSelectAllPages] = useState(false);
 
   // Auto-detect and auto-select space and page if only one exists, or from URL if provided
   useEffect(() => {
@@ -97,6 +114,20 @@ const AgentMode: React.FC<AgentModeProps> = ({ onClose, onModeSelect, autoSpaceK
     }
   }, [selectedSpace]);
 
+  // Sync "Select All" checkbox state
+  useEffect(() => {
+    setSelectAllPages(pages.length > 0 && selectedPages.length === pages.length);
+  }, [selectedPages, pages]);
+
+  const toggleSelectAllPages = () => {
+    if (selectAllPages) {
+      setSelectedPages([]);
+    } else {
+      setSelectedPages([...pages]);
+    }
+    setSelectAllPages(!selectAllPages);
+  };
+
   const handleGoalSubmit = async () => {
     if (!goal.trim() || !selectedSpace || selectedPages.length === 0) {
       setError('Please enter a goal, select a space, and at least one page.');
@@ -117,8 +148,14 @@ const AgentMode: React.FC<AgentModeProps> = ({ onClose, onModeSelect, autoSpaceK
       // Step 1: Use Gemini to analyze the goal and get tools
       setPlanSteps((steps) => steps.map((s) => s.id === 1 ? { ...s, status: 'running' } : s));
       setCurrentStep(0);
-      const analysis = await analyzeGoal(goal, selectedPages); // Only pass user-selected pages
-      toolsToUse = analysis.tools || [];
+      // INTENT-BASED TOOL ROUTING: If user doesn't mention a tool, pick based on intent/content
+      let selectedTool = '';
+      if (selectedPages.length > 0) {
+        selectedTool = await determineToolByIntentAndContent(goal, selectedSpace, selectedPages[0]);
+      }
+      // If analyzeGoal returns tools, use them, else fallback to intent-based
+      const analysis = await analyzeGoal(goal, selectedPages);
+      toolsToUse = analysis.tools && analysis.tools.length > 0 ? analysis.tools : (selectedTool ? [selectedTool] : ['ai_powered_search']);
       let selectedPagesFromAI = analysis.pages || [];
       // Only allow pages that the user selected
       selectedPagesFromAI = selectedPagesFromAI.filter((p: string) => selectedPages.includes(p));
@@ -222,6 +259,15 @@ const AgentMode: React.FC<AgentModeProps> = ({ onClose, onModeSelect, autoSpaceK
       const getRelevantOutput = (result: any) => {
         if (!result) return '';
         if (typeof result === 'string') return result;
+        if (result.summary && result.timestamps && Array.isArray(result.timestamps) && result.timestamps.length > 0) {
+          // Show both full summary and timestamped segments
+          let summaryBlock = typeof result.summary === 'string' ? result.summary : result.summary.join('\n');
+          let timestampedBlock = result.timestamps.map((ts: string, idx: number) => {
+            let point = Array.isArray(result.summary) ? result.summary[idx] : (typeof result.summary === 'string' ? result.summary.split(/\n|\r|\r\n/)[idx] : '');
+            return ts ? `[${ts}] ${point}` : point;
+          }).filter(Boolean).join('\n');
+          return `**Full Summary:**\n${summaryBlock}\n\n**Timestamped Segments:**\n${timestampedBlock}`;
+        }
         if (result.summary) return result.summary;
         if (result.impact_analysis) return result.impact_analysis;
         if (result.modified_code) return result.modified_code;

@@ -51,6 +51,16 @@ const AIPoweredSearch: React.FC<AIPoweredSearchProps> = ({
     { id: 'image' as const, label: 'Image Insights & Chart Builder', icon: Image },
   ];
 
+  // Add a mapping of feature id to tooltip descriptions
+  const featureTooltips: Record<string, string> = {
+    search: 'AI Powered Search\nSearch and summarize Confluence pages using AI.',
+    video: 'Video Summarizer\nGenerate summaries and insights from video content.',
+    code: 'Code Assistant\nAnalyze, convert, or explain code in your documentation.',
+    impact: 'Impact Analyzer\nCompare pages and analyze the impact of changes.',
+    test: 'Test Support Tool\nGenerate and review test strategies and QA insights.',
+    image: 'Image Insights & Chart Builder\nExtract insights from images and build charts.',
+  };
+
   // Load spaces on component mount
   useEffect(() => {
     loadSpaces();
@@ -182,20 +192,26 @@ const AIPoweredSearch: React.FC<AIPoweredSearchProps> = ({
                 {features.map((feature) => {
                   const Icon = feature.icon;
                   const isActive = feature.id === 'search';
-                  
                   return (
-                    <button
-                      key={feature.id}
-                      onClick={() => onFeatureSelect(feature.id)}
-                      className={`flex items-center space-x-2 px-4 py-2 rounded-lg backdrop-blur-sm border transition-all duration-200 whitespace-nowrap flex-shrink-0 ${
-                        isActive
-                          ? 'bg-white/90 text-confluence-blue shadow-lg border-white/30'
-                          : 'bg-white/10 text-white hover:bg-white/20 border-white/10'
-                      }`}
-                    >
-                      <Icon className="w-4 h-4" />
-                      <span className="text-sm font-medium">{feature.label}</span>
-                    </button>
+                    <div key={feature.id} className="relative group">
+                      <button
+                        onClick={() => onFeatureSelect(feature.id)}
+                        className={`flex items-center space-x-2 px-4 py-2 rounded-lg backdrop-blur-sm border transition-all duration-200 whitespace-nowrap flex-shrink-0 ${
+                          isActive
+                            ? 'bg-white/90 text-confluence-blue shadow-lg border-white/30'
+                            : 'bg-white/10 text-white hover:bg-white/20 border-white/10'
+                        }`}
+                      >
+                        <Icon className="w-4 h-4" />
+                        <span className="text-sm font-medium">{feature.label}</span>
+                      </button>
+                      {/* Tooltip */}
+                      <div className="absolute left-1/2 -translate-x-1/2 mt-2 z-50 hidden group-hover:block pointer-events-none">
+                        <div className="bg-gray-900 text-white text-xs rounded-lg px-3 py-2 shadow-lg whitespace-pre-line min-w-[180px] text-center opacity-90">
+                          {featureTooltips[feature.id]}
+                        </div>
+                      </div>
+                    </div>
                   );
                 })}
               </div>

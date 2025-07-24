@@ -491,17 +491,13 @@ ${outputTabs.find(tab => tab.id === 'used-tools')?.content || ''}
           <button
             className="mr-2 mt-8 p-2 rounded hover:bg-gray-200 focus:outline-none"
             aria-label="Open tool sidebar"
-            onClick={() => {
-              // This button is removed, so this function is no longer needed.
-              // If the intent was to remove the sidebar UI entirely, this would be the next step.
-              // For now, we'll keep the button but remove the sidebar logic.
-            }}
+            onClick={() => {}} // Removed sidebar functionality
             style={{ height: '40px', display: 'flex', alignItems: 'center' }}
           >
             <Menu className="w-6 h-6 text-gray-600" />
           </button>
           {/* Sidebar */}
-          {/* The sidebar UI is removed as per the edit hint. */}
+          {/* Removed sidebar UI */}
           {/* Main Content (rest of AgentMode UI) */}
           <div className="flex-1">
             <div className="p-6 overflow-y-auto max-h-[calc(90vh-200px)]">

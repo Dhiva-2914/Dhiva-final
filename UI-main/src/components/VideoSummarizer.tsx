@@ -48,6 +48,15 @@ const VideoSummarizer: React.FC<VideoSummarizerProps> = ({ onClose, onFeatureSel
     { id: 'image' as const, label: 'Image Insights & Chart Builder', icon: Image },
   ];
 
+  const featureDescriptions = {
+    search: 'AI-powered search across your Confluence spaces. Find answers instantly.',
+    video: 'Summarize and analyze video content from your Confluence pages.',
+    code: 'Get code explanations, refactoring, and code generation help.',
+    impact: 'Analyze the impact of changes between Confluence pages.',
+    test: 'Generate and review test strategies for your code.',
+    image: 'Extract insights and build charts from images in your pages.'
+  };
+
   // Load spaces on component mount
   useEffect(() => {
     loadSpaces();
@@ -300,20 +309,23 @@ ${video.qa?.map(qa => `**Q:** ${qa.question}\n**A:** ${qa.answer}`).join('\n\n')
                 {features.map((feature) => {
                   const Icon = feature.icon;
                   const isActive = feature.id === 'video';
-                  
                   return (
-                    <button
-                      key={feature.id}
-                      onClick={() => onFeatureSelect(feature.id)}
-                      className={`flex items-center space-x-2 px-4 py-2 rounded-lg backdrop-blur-sm border transition-all duration-200 whitespace-nowrap flex-shrink-0 ${
-                        isActive
-                          ? 'bg-white/90 text-confluence-blue shadow-lg border-white/30'
-                          : 'bg-white/10 text-white hover:bg-white/20 border-white/10'
-                      }`}
-                    >
-                      <Icon className="w-4 h-4" />
-                      <span className="text-sm font-medium">{feature.label}</span>
-                    </button>
+                    <div key={feature.id} className="relative group">
+                      <button
+                        onClick={() => onFeatureSelect(feature.id)}
+                        className={`flex items-center space-x-2 px-4 py-2 rounded-lg backdrop-blur-sm border transition-all duration-200 whitespace-nowrap flex-shrink-0 ${
+                          isActive
+                            ? 'bg-white/90 text-confluence-blue shadow-lg border-white/30'
+                            : 'bg-white/10 text-white hover:bg-white/20 border-white/10'
+                        }`}
+                      >
+                        <Icon className="w-4 h-4" />
+                        <span className="text-sm font-medium">{feature.label}</span>
+                      </button>
+                      <div className="absolute left-1/2 -translate-x-1/2 mt-2 z-50 px-3 py-2 bg-gray-900 text-white text-xs rounded shadow-lg opacity-0 group-hover:opacity-100 pointer-events-none whitespace-pre w-56 text-center">
+                        {featureDescriptions[feature.id]}
+                      </div>
+                    </div>
                   );
                 })}
               </div>

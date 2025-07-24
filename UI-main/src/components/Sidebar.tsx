@@ -10,6 +10,15 @@ const tools = [
   { id: 'test', label: 'Test Support Tool', icon: TestTube },
 ];
 
+const toolDescriptions: Record<string, string> = {
+  search: 'Search and analyze Confluence content with AI',
+  video: 'Summarize and extract insights from video content',
+  code: 'Get code assistance and suggestions',
+  image: 'Analyze images and build charts',
+  impact: 'Analyze the impact of changes',
+  test: 'Support for testing and QA tasks',
+};
+
 interface SidebarProps {
   onToolSelect: (toolId: string) => void;
   onClose: () => void;
@@ -26,15 +35,19 @@ const Sidebar: React.FC<SidebarProps> = ({ onToolSelect, onClose, isOpen, active
       </button>
       <div className="flex flex-col gap-4 items-center w-full">
         {tools.map(({ id, label, icon: Icon }) => (
-          <div key={id} className="relative group w-full flex justify-center">
+          <div key={id} className="relative group w-full flex flex-col items-center">
             <button
               onClick={() => onToolSelect(id)}
               className={`p-2 rounded-lg flex items-center justify-center w-12 h-12 transition-colors ${activeTool === id ? 'bg-gray-200' : 'hover:bg-gray-100'}`}
             >
               <Icon className="w-6 h-6 text-gray-700" />
             </button>
-            <span className="absolute left-14 top-1/2 -translate-y-1/2 bg-gray-800 text-white text-xs rounded px-2 py-1 opacity-0 group-hover:opacity-100 pointer-events-none whitespace-nowrap transition-opacity">
+            <span className="mt-1 text-xs text-gray-700 cursor-pointer group-hover:underline relative">
               {label}
+              {/* Tooltip for feature description */}
+              <span className="absolute left-1/2 -translate-x-1/2 top-7 z-50 bg-gray-900 text-white text-xs rounded px-3 py-2 shadow-lg opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none">
+                {toolDescriptions[id]}
+              </span>
             </span>
           </div>
         ))}

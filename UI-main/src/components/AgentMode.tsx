@@ -59,9 +59,12 @@ const AgentMode: React.FC<AgentModeProps> = ({ onClose, onModeSelect, autoSpaceK
   const [selectedPages, setSelectedPages] = useState<string[]>([]);
   const [error, setError] = useState('');
   const [selectAllPages, setSelectAllPages] = useState(false);
+  const [userHasSelectedSpace, setUserHasSelectedSpace] = useState(false);
+  const [userHasSelectedPages, setUserHasSelectedPages] = useState(false);
 
   // Auto-detect and auto-select space and page if only one exists, or from URL if provided
   useEffect(() => {
+    if (userHasSelectedSpace) return; // Don't auto-detect if user has selected
     const loadSpacesAndPages = async () => {
       try {
         const result = await apiService.getSpaces();
@@ -90,29 +93,28 @@ const AgentMode: React.FC<AgentModeProps> = ({ onClose, onModeSelect, autoSpaceK
       }
     };
     loadSpacesAndPages();
-  }, [autoSpaceKey, isSpaceAutoConnected]);
+  }, [autoSpaceKey, isSpaceAutoConnected, userHasSelectedSpace]);
 
   // Load pages when space is selected, and auto-select page if only one exists or from URL
   useEffect(() => {
-    if (selectedSpace) {
-      const loadPages = async () => {
-        try {
-          const result = await apiService.getPages(selectedSpace);
-          setPages(result.pages);
-          // Auto-select page from URL if present
-          const { page } = getConfluenceSpaceAndPageFromUrl();
-          if (page && result.pages.includes(page)) {
-            setSelectedPages([page]);
-          } else if (result.pages.length === 1) {
-            setSelectedPages([result.pages[0]]);
-          }
-        } catch (err) {
-          setError('Failed to load pages.');
+    if (!selectedSpace || userHasSelectedPages) return; // Don't auto-select if user has selected
+    const loadPages = async () => {
+      try {
+        const result = await apiService.getPages(selectedSpace);
+        setPages(result.pages);
+        // Auto-select page from URL if present
+        const { page } = getConfluenceSpaceAndPageFromUrl();
+        if (page && result.pages.includes(page)) {
+          setSelectedPages([page]);
+        } else if (result.pages.length === 1) {
+          setSelectedPages([result.pages[0]]);
         }
-      };
-      loadPages();
-    }
-  }, [selectedSpace]);
+      } catch (err) {
+        setError('Failed to load pages.');
+      }
+    };
+    loadPages();
+  }, [selectedSpace, userHasSelectedPages]);
 
   // Sync "Select All" checkbox state
   useEffect(() => {

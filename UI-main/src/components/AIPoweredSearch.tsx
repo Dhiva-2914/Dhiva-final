@@ -454,13 +454,13 @@ const AIPoweredSearch: React.FC<AIPoweredSearchProps> = ({
                       <p className="text-gray-500">Configure your search parameters and click \"Generate AI Response\" to get started.</p>
                     </div>
                   )}
-                {/* End of Results Column */}
+                  {/* End of Results Column */}
                 </div>
-              {/* End of Flex Row */}
+                {/* End of Flex Row */}
               </div>
-            {/* End of Main Card */}
+              {/* End of Main Card */}
             </div>
-          {/* End of Centered Container */}
+            {/* End of Centered Container */}
           </div>
         )}
         {showToast && (

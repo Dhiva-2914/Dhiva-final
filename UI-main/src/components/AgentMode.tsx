@@ -205,15 +205,15 @@ const AgentMode: React.FC<AgentModeProps> = ({ onClose, onModeSelect, autoSpaceK
       // Split instructions
       const instructions = splitInstructions(goal);
       // Map each instruction to the correct page/tool based on content type and intent
-      const impactResults: Array<{ page: string, result: string }> = [];
-      const pageResults: Record<string, string[]> = {};
-      for (const instruction of instructions) {
-        // For each selected page, get its type
+      const impactResults: Array<{ page: string, result: string, riskRating?: number, riskDiff?: number }> = [];
+      const pageResults: Record<string, { tool: string, outputs: string[] }> = {};
+      let optimizedCodeByPage: Record<string, string> = {};
+      for (let i = 0; i < instructions.length; i++) {
+        const instruction = instructions[i];
         const pageTypeMap: Record<string, string> = {};
         for (const p of pageTypes) {
           pageTypeMap[p.title] = p.content_type;
         }
-        // For each page, determine if it matches the instruction/tool
         let matchedPages: string[] = [];
         let toolForInstruction = '';
         for (const page of selectedPages) {
@@ -235,31 +235,49 @@ const AgentMode: React.FC<AgentModeProps> = ({ onClose, onModeSelect, autoSpaceK
           matchedPages = [selectedPages[0]];
           toolForInstruction = await determineToolByIntentAndContent(instruction, selectedSpace, selectedPages[0]);
         }
-        // If one page and multiple related actions for the same tool, execute sequentially
+        // Special handling for sequential code actions and impact analysis
         if (matchedPages.length === 1 && toolForInstruction === 'code_assistant') {
           const relatedActions = splitRelatedActions(instruction);
-          let codeOutput = '';
           let lastOutput = '';
+          let outputs: string[] = [];
           for (const action of relatedActions) {
             const code = lastOutput || '';
             const actionPrompts = codeAiActionPromptMap(code);
             const prompt = actionPrompts[action] || action || Object.values(actionPrompts)[0];
             const res = await apiService.codeAssistant({ space_key: selectedSpace, page_title: matchedPages[0], instruction: prompt });
             lastOutput = res.modified_code || res.converted_code || res.original_code || res.summary || '';
+            outputs.push(lastOutput);
           }
-          if (!pageResults[matchedPages[0]]) pageResults[matchedPages[0]] = [];
-          pageResults[matchedPages[0]].push(lastOutput);
-        } else if (toolForInstruction === 'impact_analyzer' && matchedPages.length > 0) {
+          pageResults[matchedPages[0]] = { tool: 'Code Assistant', outputs };
+          optimizedCodeByPage[matchedPages[0]] = lastOutput;
+        } else if (toolForInstruction === 'impact_analyzer' && matchedPages.length === 2) {
+          // If previous instruction was a code modification for page_1, use optimized code for impact analysis
+          const [page1, page2] = matchedPages;
+          let oldCode = optimizedCodeByPage[page1] || '';
+          let newCode = '';
+          // If the user just optimized page_1, use that output
+          // (In a real implementation, you might need to update the backend to accept raw code for impact analysis)
+          // For now, just call the API as usual
+          const res = await apiService.impactAnalyzer({ space_key: selectedSpace, old_page_title: page1, new_page_title: page2, question: instruction });
+          // Extract risk rating and risk difference from the response if available
+          let riskRating = res.risk_score || 0;
+          let riskDiff = res.percentage_change || 0;
+          impactResults.push({ page: `${page1} vs ${page2}`, result: res.impact_analysis, riskRating, riskDiff });
+        } else if (toolForInstruction === 'impact_analyzer' && matchedPages.length === 1) {
           for (const page of matchedPages) {
             const res = await apiService.impactAnalyzer({ space_key: selectedSpace, old_page_title: page, new_page_title: page, question: instruction });
-            impactResults.push({ page, result: res.impact_analysis });
+            let riskRating = res.risk_score || 0;
+            let riskDiff = res.percentage_change || 0;
+            impactResults.push({ page, result: res.impact_analysis, riskRating, riskDiff });
           }
         } else {
           for (const page of matchedPages) {
             let output = '';
+            let toolLabel = '';
             if (toolForInstruction === 'ai_powered_search') {
               const res = await apiService.search({ space_key: selectedSpace, page_titles: [page], query: instruction });
               output = res.response;
+              toolLabel = 'AI Powered Search';
             } else if (toolForInstruction === 'video_summarizer') {
               const res = await apiService.videoSummarizer({ space_key: selectedSpace, page_title: page });
               if (res.timestamps && Array.isArray(res.timestamps) && res.timestamps.length > 0) {
@@ -270,24 +288,28 @@ const AgentMode: React.FC<AgentModeProps> = ({ onClose, onModeSelect, autoSpaceK
               } else {
                 output = 'No timestamped summary available.';
               }
+              toolLabel = 'Video Summarizer';
             } else if (toolForInstruction === 'test_support') {
               const res = await apiService.testSupport({ space_key: selectedSpace, code_page_title: page });
               output = res.test_strategy || res.ai_response || '';
+              toolLabel = 'Test Support';
             } else if (toolForInstruction === 'image_insights') {
               const images = await apiService.getImages(selectedSpace, page);
               if (images && images.images && images.images.length > 0) {
                 const summaries = await Promise.all(images.images.map((imgUrl: string) => apiService.imageSummary({ space_key: selectedSpace, page_title: page, image_url: imgUrl })));
                 output = summaries.map((s, i) => `Image ${i + 1}: ${s.summary}`).join('\n');
               }
+              toolLabel = 'Image Insights';
             } else if (toolForInstruction === 'chart_builder') {
               const images = await apiService.getImages(selectedSpace, page);
               if (images && images.images && images.images.length > 0) {
                 const charts = await Promise.all(images.images.map((imgUrl: string) => apiService.createChart({ space_key: selectedSpace, page_title: page, image_url: imgUrl, chart_type: 'bar', filename: 'chart', format: 'png' })));
                 output = charts.map((c, i) => `Chart ${i + 1}: [Chart Image]`).join('\n');
               }
+              toolLabel = 'Chart Builder';
             }
-            if (!pageResults[page]) pageResults[page] = [];
-            pageResults[page].push(output);
+            if (!pageResults[page]) pageResults[page] = { tool: toolLabel, outputs: [] };
+            pageResults[page].outputs.push(output);
           }
         }
       }
@@ -312,7 +334,7 @@ const AgentMode: React.FC<AgentModeProps> = ({ onClose, onModeSelect, autoSpaceK
           label: 'Page Results',
           icon: FileText,
           content: '',
-          results: Object.entries(pageResults).map(([page, outputs]) => ({ page, result: outputs.join('\n\n') })),
+          results: Object.entries(pageResults).map(([page, { tool, outputs }]) => ({ page, tool, result: outputs.join('\n\n') })),
         }
       ] : [];
       const tabs = [
@@ -666,25 +688,6 @@ ${outputTabs.find(tab => tab.id === 'used-tools')?.content || ''}
                   </button>
                 </div>
                 {error && <p className="text-red-500 text-sm mt-4">{error}</p>}
-              </div>
-            </div>
-          )}
-
-          {/* Planning Phase */}
-          {isPlanning && (
-            <div className="max-w-4xl mx-auto">
-              <div className="bg-white/60 backdrop-blur-xl rounded-xl p-8 border border-white/20 shadow-lg text-center">
-                <div className="flex items-center justify-center space-x-3 mb-4">
-                  <Brain className="w-8 h-8 text-orange-500 animate-pulse" />
-                  <h3 className="text-xl font-bold text-gray-800">Planning steps...</h3>
-                </div>
-                <div className="flex items-center justify-center space-x-4 text-gray-600">
-                  <span>1. Retrieve context</span>
-                  <span>→</span>
-                  <span>2. Summarize</span>
-                  <span>→</span>
-                  <span>3. Recommend changes</span>
-                </div>
               </div>
             </div>
           )}

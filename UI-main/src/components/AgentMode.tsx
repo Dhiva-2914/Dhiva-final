@@ -60,6 +60,16 @@ function splitInstructions(input: string): string[] {
     .filter(instr => instr.length > 0);
 }
 
+// Helper to split a single instruction with multiple related actions (e.g., 'optimize and convert')
+function splitRelatedActions(instruction: string): string[] {
+  // Heuristic: split on ' and ', ' then ', or ';' if the actions are likely related
+  // This can be improved with NLP if needed
+  return instruction
+    .split(/\band\b|\bthen\b|;/i)
+    .map(instr => instr.trim())
+    .filter(instr => instr.length > 0);
+}
+
 // Extend OutputTab type for results
 interface OutputTabWithResults extends OutputTab {
   results?: Array<any>;
@@ -195,113 +205,9 @@ const AgentMode: React.FC<AgentModeProps> = ({ onClose, onModeSelect, autoSpaceK
       // Split instructions
       const instructions = splitInstructions(goal);
       // Map each instruction to the correct page/tool based on content type and intent
-      const allResults: Array<{ instruction: string, tool: string, page: string, output: string }> = [];
-      for (const instruction of instructions) {
-        // Analyze each instruction
-        let selectedTool = '';
-        // For each selected page, get its type
-        const pageTypeMap: Record<string, string> = {};
-        for (const p of pageTypes) {
-          pageTypeMap[p.title] = p.content_type;
-        }
-        // For each page, determine if it matches the instruction/tool
-        let matchedPages: string[] = [];
-        let toolForInstruction = '';
-        for (const page of selectedPages) {
-          const type = pageTypeMap[page] || 'text';
-          // Use intent detection to pick tool
-          const tool = await determineToolByIntentAndContent(instruction, selectedSpace, page);
-          // Heuristic: match tool to content type
-          if (
-            (tool === 'code_assistant' && type === 'code') ||
-            (tool === 'video_summarizer' && type === 'video') ||
-            (tool === 'image_insights' && type === 'image') ||
-            (tool === 'ai_powered_search' && type === 'text') ||
-            (tool === 'impact_analyzer' && type === 'code') ||
-            (tool === 'test_support' && type === 'code')
-          ) {
-            matchedPages.push(page);
-            toolForInstruction = tool;
-          }
-        }
-        // Fallback: if no match, just use first page and tool
-        if (!matchedPages.length && selectedPages.length > 0) {
-          matchedPages = [selectedPages[0]];
-          toolForInstruction = await determineToolByIntentAndContent(instruction, selectedSpace, selectedPages[0]);
-        }
-        // If related and for one page/tool, execute sequentially (not implemented here for brevity)
-        if (toolForInstruction === 'impact_analyzer' && matchedPages.length > 0) {
-          // Run impact analysis for each page individually
-          for (const page of matchedPages) {
-            const res = await apiService.impactAnalyzer({ space_key: selectedSpace, old_page_title: page, new_page_title: page, question: instruction });
-            allResults.push({ instruction, tool: toolForInstruction, page, output: res.impact_analysis });
-          }
-        } else if (toolForInstruction === 'code_assistant') {
-          // Use Code Assistant AI action logic if relevant
-          for (const page of matchedPages) {
-            // For simplicity, treat the instruction as the AI action or direct prompt
-            let output = '';
-            // If the instruction matches a known AI action, use the mapped prompt
-            const code = ''; // You may want to fetch the code content if needed
-            const actionPrompts = codeAiActionPromptMap(code);
-            const prompt = actionPrompts[instruction] || instruction || Object.values(actionPrompts)[0];
-            const res = await apiService.codeAssistant({ space_key: selectedSpace, page_title: page, instruction: prompt });
-            output = res.modified_code || res.converted_code || res.original_code || res.summary || '';
-            allResults.push({ instruction, tool: toolForInstruction, page, output });
-          }
-        } else {
-          // Other tools: run per page
-          for (const page of matchedPages) {
-            let output = '';
-            if (toolForInstruction === 'ai_powered_search') {
-              const res = await apiService.search({ space_key: selectedSpace, page_titles: [page], query: instruction });
-              output = res.response;
-            } else if (toolForInstruction === 'video_summarizer') {
-              const res = await apiService.videoSummarizer({ space_key: selectedSpace, page_title: page });
-              if (res.timestamps && Array.isArray(res.timestamps) && res.timestamps.length > 0) {
-                output = res.timestamps.map((ts: string, idx: number) => {
-                  let point = Array.isArray(res.summary) ? res.summary[idx] : (typeof res.summary === 'string' ? res.summary.split(/\n|\r|\r\n/)[idx] : '');
-                  return ts ? `[${ts}] ${point}` : point;
-                }).filter(Boolean).join('\n');
-              } else {
-                output = 'No timestamped summary available.';
-              }
-            } else if (toolForInstruction === 'test_support') {
-              const res = await apiService.testSupport({ space_key: selectedSpace, code_page_title: page });
-              output = res.test_strategy || res.ai_response || '';
-            } else if (toolForInstruction === 'image_insights') {
-              const images = await apiService.getImages(selectedSpace, page);
-              if (images && images.images && images.images.length > 0) {
-                const summaries = await Promise.all(images.images.map((imgUrl: string) => apiService.imageSummary({ space_key: selectedSpace, page_title: page, image_url: imgUrl })));
-                output = summaries.map((s, i) => `Image ${i + 1}: ${s.summary}`).join('\n');
-              }
-            } else if (toolForInstruction === 'chart_builder') {
-              const images = await apiService.getImages(selectedSpace, page);
-              if (images && images.images && images.images.length > 0) {
-                const charts = await Promise.all(images.images.map((imgUrl: string) => apiService.createChart({ space_key: selectedSpace, page_title: page, image_url: imgUrl, chart_type: 'bar', filename: 'chart', format: 'png' })));
-                output = charts.map((c, i) => `Chart ${i + 1}: [Chart Image]`).join('\n');
-              }
-            }
-            allResults.push({ instruction, tool: toolForInstruction, page, output });
-          }
-        }
-        orchestrationReasoning += `\nInstruction: ${instruction}\nReasoning: (Tool: ${toolForInstruction}, Pages: ${matchedPages.join(', ')})`;
-      }
-      setPlanSteps((steps) => steps.map((s) => s.id === 1 ? { ...s, status: 'completed' } : s));
-      setCurrentStep(1);
-      setProgressPercent(50);
-      // Update progress bar to 50%
-      setPlanSteps((steps) => steps.map((s) => s.id === 2 ? { ...s, status: 'running' } : s));
-      // ... execution happens above ...
-      setPlanSteps((steps) => steps.map((s) => s.id === 2 ? { ...s, status: 'completed' } : s));
-      setCurrentStep(2);
-      setProgressPercent(100);
-      // Prepare output tabs for new UI
       const impactResults: Array<{ page: string, result: string }> = [];
-      const otherResults: Array<{ tool: string, page: string, result: string }> = [];
+      const pageResults: Record<string, string[]> = {};
       for (const instruction of instructions) {
-        // Analyze each instruction
-        let selectedTool = '';
         // For each selected page, get its type
         const pageTypeMap: Record<string, string> = {};
         for (const p of pageTypes) {
@@ -312,9 +218,7 @@ const AgentMode: React.FC<AgentModeProps> = ({ onClose, onModeSelect, autoSpaceK
         let toolForInstruction = '';
         for (const page of selectedPages) {
           const type = pageTypeMap[page] || 'text';
-          // Use intent detection to pick tool
           const tool = await determineToolByIntentAndContent(instruction, selectedSpace, page);
-          // Heuristic: match tool to content type
           if (
             (tool === 'code_assistant' && type === 'code') ||
             (tool === 'video_summarizer' && type === 'video') ||
@@ -327,33 +231,30 @@ const AgentMode: React.FC<AgentModeProps> = ({ onClose, onModeSelect, autoSpaceK
             toolForInstruction = tool;
           }
         }
-        // Fallback: if no match, just use first page and tool
         if (!matchedPages.length && selectedPages.length > 0) {
           matchedPages = [selectedPages[0]];
           toolForInstruction = await determineToolByIntentAndContent(instruction, selectedSpace, selectedPages[0]);
         }
-        // If related and for one page/tool, execute sequentially (not implemented here for brevity)
-        if (toolForInstruction === 'impact_analyzer' && matchedPages.length > 0) {
-          // Run impact analysis for each page individually
+        // If one page and multiple related actions for the same tool, execute sequentially
+        if (matchedPages.length === 1 && toolForInstruction === 'code_assistant') {
+          const relatedActions = splitRelatedActions(instruction);
+          let codeOutput = '';
+          let lastOutput = '';
+          for (const action of relatedActions) {
+            const code = lastOutput || '';
+            const actionPrompts = codeAiActionPromptMap(code);
+            const prompt = actionPrompts[action] || action || Object.values(actionPrompts)[0];
+            const res = await apiService.codeAssistant({ space_key: selectedSpace, page_title: matchedPages[0], instruction: prompt });
+            lastOutput = res.modified_code || res.converted_code || res.original_code || res.summary || '';
+          }
+          if (!pageResults[matchedPages[0]]) pageResults[matchedPages[0]] = [];
+          pageResults[matchedPages[0]].push(lastOutput);
+        } else if (toolForInstruction === 'impact_analyzer' && matchedPages.length > 0) {
           for (const page of matchedPages) {
             const res = await apiService.impactAnalyzer({ space_key: selectedSpace, old_page_title: page, new_page_title: page, question: instruction });
             impactResults.push({ page, result: res.impact_analysis });
           }
-        } else if (toolForInstruction === 'code_assistant') {
-          // Use Code Assistant AI action logic if relevant
-          for (const page of matchedPages) {
-            // For simplicity, treat the instruction as the AI action or direct prompt
-            let output = '';
-            // If the instruction matches a known AI action, use the mapped prompt
-            const code = ''; // You may want to fetch the code content if needed
-            const actionPrompts = codeAiActionPromptMap(code);
-            const prompt = actionPrompts[instruction] || instruction || Object.values(actionPrompts)[0];
-            const res = await apiService.codeAssistant({ space_key: selectedSpace, page_title: page, instruction: prompt });
-            output = res.modified_code || res.converted_code || res.original_code || res.summary || '';
-            otherResults.push({ tool: toolForInstruction, page, result: output });
-          }
         } else {
-          // Other tools: run per page
           for (const page of matchedPages) {
             let output = '';
             if (toolForInstruction === 'ai_powered_search') {
@@ -385,30 +286,38 @@ const AgentMode: React.FC<AgentModeProps> = ({ onClose, onModeSelect, autoSpaceK
                 output = charts.map((c, i) => `Chart ${i + 1}: [Chart Image]`).join('\n');
               }
             }
-            otherResults.push({ tool: toolForInstruction, page, result: output });
+            if (!pageResults[page]) pageResults[page] = [];
+            pageResults[page].push(output);
           }
         }
       }
+      setPlanSteps((steps) => steps.map((s) => s.id === 1 ? { ...s, status: 'completed' } : s));
+      setCurrentStep(1);
+      setProgressPercent(50);
+      setPlanSteps((steps) => steps.map((s) => s.id === 2 ? { ...s, status: 'running' } : s));
+      setPlanSteps((steps) => steps.map((s) => s.id === 2 ? { ...s, status: 'completed' } : s));
+      setCurrentStep(2);
+      setProgressPercent(100);
       // Prepare output tabs for new UI
       const impactTab = impactResults.length > 0 ? {
         id: 'impact-analysed',
         label: 'Impact Analysed',
         icon: FileText,
-        content: '', // Will be rendered with a button/dropdown
+        content: '',
         results: impactResults,
       } : null;
-      const otherTabs = otherResults.length > 0 ? [
+      const pageTabs = Object.keys(pageResults).length > 0 ? [
         {
           id: 'per-page-results',
           label: 'Page Results',
           icon: FileText,
-          content: '', // Will be rendered with buttons
-          results: otherResults,
+          content: '',
+          results: Object.entries(pageResults).map(([page, outputs]) => ({ page, result: outputs.join('\n\n') })),
         }
       ] : [];
       const tabs = [
         ...(impactTab ? [impactTab] : []),
-        ...otherTabs,
+        ...pageTabs,
         {
           id: 'reasoning',
           label: 'Reasoning',
@@ -423,13 +332,13 @@ const AgentMode: React.FC<AgentModeProps> = ({ onClose, onModeSelect, autoSpaceK
         },
       ];
       setOutputTabs(tabs);
-      setActiveTab(impactTab ? 'impact-analysed' : (otherTabs.length > 0 ? 'per-page-results' : 'reasoning'));
+      setActiveTab(impactTab ? 'impact-analysed' : (pageTabs.length > 0 ? 'per-page-results' : 'reasoning'));
       setActiveResult(null);
     } catch (err: any) {
       setError(err.message || 'An error occurred during orchestration.');
     } finally {
       setIsPlanning(false);
-      setCurrentStep(2); // Always 100% at the end
+      setCurrentStep(2);
       setProgressPercent(100);
     }
   };

@@ -75,6 +75,94 @@ interface OutputTabWithResults extends OutputTab {
   results?: Array<any>;
 }
 
+// Add helper to render Impact Analyzer output in the reference image style
+interface MetricsType {
+  linesAdded?: number;
+  linesRemoved?: number;
+  filesChanged?: number;
+  percentageChanged?: number;
+}
+function ImpactMetricsAndRisk({ metrics, riskScore, riskLevel }: { metrics: MetricsType, riskScore: number, riskLevel: string }) {
+  const getRiskColor = (level: string) => {
+    switch (level) {
+      case 'low': return 'text-green-700 bg-green-100/80 backdrop-blur-sm border-green-200/50';
+      case 'medium': return 'text-yellow-700 bg-yellow-100/80 backdrop-blur-sm border-yellow-200/50';
+      case 'high': return 'text-red-700 bg-red-100/80 backdrop-blur-sm border-red-200/50';
+      default: return 'text-gray-700 bg-gray-100/80 backdrop-blur-sm border-gray-200/50';
+    }
+  };
+  const getRiskIcon = (level: string) => {
+    switch (level) {
+      case 'low': return <span className="mr-2">🟢</span>;
+      case 'medium': return <span className="mr-2">🟡</span>;
+      case 'high': return <span className="mr-2">⚠️</span>;
+      default: return <span className="mr-2">❔</span>;
+    }
+  };
+  return (
+    <div>
+      <div className="mt-2 space-y-3">
+        <h4 className="font-semibold text-gray-800">Change Metrics</h4>
+        <div className="grid grid-cols-2 gap-2 text-sm">
+          <div className="bg-green-100/80 backdrop-blur-sm p-2 rounded text-center border border-white/20">
+            <div className="font-semibold text-green-800">+{metrics?.linesAdded ?? 0}</div>
+            <div className="text-green-600 text-xs">Added</div>
+          </div>
+          <div className="bg-red-100/80 backdrop-blur-sm p-2 rounded text-center border border-white/20">
+            <div className="font-semibold text-red-800">-{metrics?.linesRemoved ?? 0}</div>
+            <div className="text-red-600 text-xs">Removed</div>
+          </div>
+          <div className="bg-blue-100/80 backdrop-blur-sm p-2 rounded text-center border border-white/20">
+            <div className="font-semibold text-blue-800">{metrics?.filesChanged ?? 1}</div>
+            <div className="text-blue-600 text-xs">Files</div>
+          </div>
+          <div className="bg-purple-100/80 backdrop-blur-sm p-2 rounded text-center border border-white/20">
+            <div className="font-semibold text-purple-800">{metrics?.percentageChanged ?? 0}%</div>
+            <div className="text-purple-600 text-xs">Changed</div>
+          </div>
+        </div>
+      </div>
+      <div className="mt-6">
+        <h4 className="font-semibold text-gray-800 mb-2">Risk Assessment</h4>
+        <div className={`p-3 rounded-lg flex items-center space-x-2 border ${getRiskColor(riskLevel)}`}>
+          {getRiskIcon(riskLevel)}
+          <div>
+            <div className="font-semibold capitalize">{riskLevel} Risk</div>
+            <div className="text-sm">Score: {riskScore}/10</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Add helper to render Test Support Tool output in the same style as Tool Mode
+function TestStrategyOutput({ strategy }: { strategy: string }) {
+  return (
+    <div className="bg-white/70 backdrop-blur-sm rounded-lg p-4 border border-white/20 prose prose-sm max-w-none">
+      {strategy.split('\n').map((line: string, index: number) => {
+        if (line.startsWith('### ')) {
+          return <h3 key={index} className="text-lg font-bold text-gray-800 mt-4 mb-2">{line.substring(4)}</h3>;
+        } else if (line.startsWith('## ')) {
+          return <h2 key={index} className="text-xl font-bold text-gray-800 mt-6 mb-3">{line.substring(3)}</h2>;
+        } else if (line.startsWith('# ')) {
+          return <h1 key={index} className="text-2xl font-bold text-gray-800 mt-8 mb-4">{line.substring(2)}</h1>;
+        } else if (line.startsWith('- **')) {
+          const match = line.match(/- \*\*(.*?)\*\*: (.*)/);
+          if (match) {
+            return <p key={index} className="mb-2"><strong>{match[1]}:</strong> {match[2]}</p>;
+          }
+        } else if (line.startsWith('- ')) {
+          return <p key={index} className="mb-1 ml-4">• {line.substring(2)}</p>;
+        } else if (line.trim()) {
+          return <p key={index} className="mb-2 text-gray-700">{line}</p>;
+        }
+        return <br key={index} />;
+      })}
+    </div>
+  );
+}
+
 const AgentMode: React.FC<AgentModeProps> = ({ onClose, onModeSelect, autoSpaceKey, isSpaceAutoConnected }) => {
   const [goal, setGoal] = useState('');
   const [isPlanning, setIsPlanning] = useState(false);

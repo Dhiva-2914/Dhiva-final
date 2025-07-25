@@ -41,6 +41,15 @@ const determineToolByIntentAndContent = async (goal: string, space: string, page
   return 'ai_powered_search';
 };
 
+// Helper to split user input into actionable instructions
+function splitInstructions(input: string): string[] {
+  // Simple split on ' and ', ' then ', or newlines; can be improved with NLP
+  return input
+    .split(/\band\b|\bthen\b|\n|\r|\r\n|\.|;/i)
+    .map(instr => instr.trim())
+    .filter(instr => instr.length > 0);
+}
+
 const AgentMode: React.FC<AgentModeProps> = ({ onClose, onModeSelect, autoSpaceKey, isSpaceAutoConnected }) => {
   const [goal, setGoal] = useState('');
   const [isPlanning, setIsPlanning] = useState(false);
@@ -142,148 +151,77 @@ const AgentMode: React.FC<AgentModeProps> = ({ onClose, onModeSelect, autoSpaceK
     setOutputTabs([]);
     setCurrentStep(0);
     setActiveTab('final-answer');
-    let toolsToUse: string[] = [];
     let orchestrationReasoning = '';
     try {
-      // Step 1: Use Gemini to analyze the goal and get tools
       setPlanSteps((steps) => steps.map((s) => s.id === 1 ? { ...s, status: 'running' } : s));
       setCurrentStep(0);
-      // INTENT-BASED TOOL ROUTING: If user doesn't mention a tool, pick based on intent/content
-      let selectedTool = '';
-      if (selectedPages.length > 0) {
-        selectedTool = await determineToolByIntentAndContent(goal, selectedSpace, selectedPages[0]);
+      // Split instructions
+      const instructions = splitInstructions(goal);
+      const allResults: Array<{ instruction: string, tool: string, page: string, output: string }> = [];
+      for (const instruction of instructions) {
+        // Analyze each instruction
+        let selectedTool = '';
+        if (selectedPages.length > 0) {
+          selectedTool = await determineToolByIntentAndContent(instruction, selectedSpace, selectedPages[0]);
+        }
+        const analysis = await analyzeGoal(instruction, selectedPages);
+        const toolsToUse = analysis.tools && analysis.tools.length > 0 ? analysis.tools : (selectedTool ? [selectedTool] : ['ai_powered_search']);
+        let selectedPagesFromAI = analysis.pages || [];
+        selectedPagesFromAI = selectedPagesFromAI.filter((p: string) => selectedPages.includes(p));
+        orchestrationReasoning += `\nInstruction: ${instruction}\nReasoning: ${analysis.reasoning || ''}`;
+        // For each tool and page, execute
+        for (const tool of toolsToUse) {
+          for (const page of selectedPagesFromAI) {
+            let output = '';
+            if (tool === 'ai_powered_search') {
+              const res = await apiService.search({ space_key: selectedSpace, page_titles: [page], query: instruction });
+              output = res.response;
+            } else if (tool === 'impact_analyzer') {
+              // Only run if at least 2 pages
+              if (selectedPagesFromAI.length >= 2) {
+                const res = await apiService.impactAnalyzer({ space_key: selectedSpace, old_page_title: selectedPagesFromAI[0], new_page_title: selectedPagesFromAI[1], question: instruction });
+                output = res.impact_analysis;
+                break; // Only one result for impact analyzer
+              }
+            } else if (tool === 'code_assistant') {
+              const res = await apiService.codeAssistant({ space_key: selectedSpace, page_title: page, instruction });
+              output = res.modified_code || res.converted_code || res.original_code || res.summary || '';
+            } else if (tool === 'video_summarizer') {
+              const res = await apiService.videoSummarizer({ space_key: selectedSpace, page_title: page });
+              // Only show timestamped segment
+              if (res.timestamps && Array.isArray(res.timestamps) && res.timestamps.length > 0) {
+                output = res.timestamps.map((ts: string, idx: number) => {
+                  let point = Array.isArray(res.summary) ? res.summary[idx] : (typeof res.summary === 'string' ? res.summary.split(/\n|\r|\r\n/)[idx] : '');
+                  return ts ? `[${ts}] ${point}` : point;
+                }).filter(Boolean).join('\n');
+              } else {
+                output = 'No timestamped summary available.';
+              }
+            } else if (tool === 'test_support') {
+              const res = await apiService.testSupport({ space_key: selectedSpace, code_page_title: page });
+              output = res.test_strategy || res.ai_response || '';
+            } else if (tool === 'image_insights') {
+              const images = await apiService.getImages(selectedSpace, page);
+              if (images && images.images && images.images.length > 0) {
+                const summaries = await Promise.all(images.images.map((imgUrl: string) => apiService.imageSummary({ space_key: selectedSpace, page_title: page, image_url: imgUrl })));
+                output = summaries.map((s, i) => `Image ${i + 1}: ${s.summary}`).join('\n');
+              }
+            } else if (tool === 'chart_builder') {
+              const images = await apiService.getImages(selectedSpace, page);
+              if (images && images.images && images.images.length > 0) {
+                const charts = await Promise.all(images.images.map((imgUrl: string) => apiService.createChart({ space_key: selectedSpace, page_title: page, image_url: imgUrl, chart_type: 'bar', filename: 'chart', format: 'png' })));
+                output = charts.map((c, i) => `Chart ${i + 1}: [Chart Image]`).join('\n');
+              }
+            }
+            allResults.push({ instruction, tool, page, output });
+          }
+        }
       }
-      // If analyzeGoal returns tools, use them, else fallback to intent-based
-      const analysis = await analyzeGoal(goal, selectedPages);
-      toolsToUse = analysis.tools && analysis.tools.length > 0 ? analysis.tools : (selectedTool ? [selectedTool] : ['ai_powered_search']);
-      let selectedPagesFromAI = analysis.pages || [];
-      // Only allow pages that the user selected
-      selectedPagesFromAI = selectedPagesFromAI.filter((p: string) => selectedPages.includes(p));
-      orchestrationReasoning = analysis.reasoning || '';
       setPlanSteps((steps) => steps.map((s) => s.id === 1 ? { ...s, status: 'completed' } : s));
       setCurrentStep(1);
-      // Step 2: Call the selected tools on the selected pages from AI
       setPlanSteps((steps) => steps.map((s) => s.id === 2 ? { ...s, status: 'running' } : s));
-      const toolResults: Record<string, any> = {};
-      // AI Powered Search
-      if (toolsToUse.includes('ai_powered_search')) {
-        const res = await apiService.search({
-          space_key: selectedSpace,
-          page_titles: selectedPagesFromAI,
-          query: goal,
-        });
-        toolResults['AI Powered Search'] = res;
-      }
-      // Impact Analyzer (requires at least 2 pages)
-      if (toolsToUse.includes('impact_analyzer') && selectedPagesFromAI.length >= 2) {
-        const res = await apiService.impactAnalyzer({
-          space_key: selectedSpace,
-          old_page_title: selectedPagesFromAI[0],
-          new_page_title: selectedPagesFromAI[1],
-          question: goal,
-        });
-        toolResults['Impact Analyzer'] = res;
-      }
-      // Code Assistant
-      if (toolsToUse.includes('code_assistant') && selectedPagesFromAI.length > 0) {
-        const res = await apiService.codeAssistant({
-          space_key: selectedSpace,
-          page_title: selectedPagesFromAI[0],
-          instruction: goal,
-        });
-        toolResults['Code Assistant'] = res;
-      }
-      // Video Summarizer
-      if (toolsToUse.includes('video_summarizer') && selectedPagesFromAI.length > 0) {
-        const res = await apiService.videoSummarizer({
-          space_key: selectedSpace,
-          page_title: selectedPagesFromAI[0],
-        });
-        // If summary and timestamps exist, pair them
-        if (res.summary && Array.isArray(res.timestamps ?? []) && Array.isArray(res.summary)) {
-          // If summary is an array, pair each point with timestamp
-          const paired = res.summary.map((point: string, idx: number) => {
-            const ts = (res.timestamps ?? [])[idx] || '';
-            return ts ? `[${ts}] ${point}` : point;
-          });
-          res.summary = paired.join('\n');
-        } else if (res.summary && Array.isArray(res.timestamps ?? []) && typeof res.summary === 'string') {
-          // If summary is a string, split by lines and pair
-          const summaryPoints = res.summary.split(/\n|\r|\r\n/).filter(Boolean);
-          const paired = summaryPoints.map((point: string, idx: number) => {
-            const ts = (res.timestamps ?? [])[idx] || '';
-            return ts ? `[${ts}] ${point}` : point;
-          });
-          res.summary = paired.join('\n');
-        }
-        toolResults['Video Summarizer'] = res;
-      }
-      // Test Support
-      if (toolsToUse.includes('test_support') && selectedPagesFromAI.length > 0) {
-        const res = await apiService.testSupport({
-          space_key: selectedSpace,
-          code_page_title: selectedPagesFromAI[0],
-        });
-        toolResults['Test Support'] = res;
-      }
-      // Image Insights
-      if (toolsToUse.includes('image_insights') && selectedPagesFromAI.length > 0) {
-        const images = await apiService.getImages(selectedSpace, selectedPagesFromAI[0]);
-        if (images && images.images && images.images.length > 0) {
-          const summaries = await Promise.all(images.images.map((imgUrl: string) => apiService.imageSummary({
-            space_key: selectedSpace,
-            page_title: selectedPagesFromAI[0],
-            image_url: imgUrl,
-          })));
-          toolResults['Image Insights'] = summaries;
-        }
-      }
-      // Chart Builder
-      if (toolsToUse.includes('chart_builder') && selectedPagesFromAI.length > 0) {
-        const images = await apiService.getImages(selectedSpace, selectedPagesFromAI[0]);
-        if (images && images.images && images.images.length > 0) {
-          const charts = await Promise.all(images.images.map((imgUrl: string) => apiService.createChart({
-            space_key: selectedSpace,
-            page_title: selectedPagesFromAI[0],
-            image_url: imgUrl,
-            chart_type: 'bar',
-            filename: 'chart',
-            format: 'png',
-          })));
-          toolResults['Chart Builder'] = charts;
-        }
-      }
-      setPlanSteps((steps) => steps.map((s) => s.id === 2 ? { ...s, status: 'completed' } : s));
-      setCurrentStep(planSteps.length - 1); // Ensure progress is 100% when done
       // Prepare output tabs
-      const getRelevantOutput = (result: any) => {
-        if (!result) return '';
-        if (typeof result === 'string') return result;
-        if (result.summary && result.timestamps && Array.isArray(result.timestamps) && result.timestamps.length > 0) {
-          // Show both full summary and timestamped segments
-          let summaryBlock = typeof result.summary === 'string' ? result.summary : result.summary.join('\n');
-          let timestampedBlock = result.timestamps.map((ts: string, idx: number) => {
-            let point = Array.isArray(result.summary) ? result.summary[idx] : (typeof result.summary === 'string' ? result.summary.split(/\n|\r|\r\n/)[idx] : '');
-            return ts ? `[${ts}] ${point}` : point;
-          }).filter(Boolean).join('\n');
-          return `**Full Summary:**\n${summaryBlock}\n\n**Timestamped Segments:**\n${timestampedBlock}`;
-        }
-        if (result.summary) return result.summary;
-        if (result.impact_analysis) return result.impact_analysis;
-        if (result.modified_code) return result.modified_code;
-        if (result.converted_code) return result.converted_code;
-        if (result.original_code) return result.original_code;
-        if (result.response) return result.response;
-        if (result.test_strategy) return result.test_strategy;
-        if (result.chart_data) return '[Chart Image]';
-        if (Array.isArray(result) && result.length > 0) return getRelevantOutput(result[0]);
-        return '';
-      };
-      const usedToolsContent = Object.entries(toolResults).map(([tool, result]) => {
-        const output = getRelevantOutput(result);
-        return `## ${tool}\n${output}`;
-      }).join('\n\n');
-      const finalAnswer = Object.values(toolResults).map(getRelevantOutput).filter(Boolean).join('\n\n');
+      const finalAnswer = allResults.map((r, idx) => `---\n**Instruction:** ${r.instruction}\n**Tool:** ${r.tool}\n<button class='confluence-page-btn'>${r.page}</button>\n\n${r.output}`).join('\n\n');
       const tabs = [
         {
           id: 'final-answer',
@@ -301,13 +239,7 @@ const AgentMode: React.FC<AgentModeProps> = ({ onClose, onModeSelect, autoSpaceK
           id: 'selected-pages',
           label: 'Selected Pages',
           icon: FileText,
-          content: selectedPagesFromAI.join(', '),
-        },
-        {
-          id: 'used-tools',
-          label: 'Used Tools',
-          icon: Zap,
-          content: usedToolsContent,
+          content: selectedPages.join(', '),
         },
       ];
       setOutputTabs(tabs);
@@ -316,7 +248,6 @@ const AgentMode: React.FC<AgentModeProps> = ({ onClose, onModeSelect, autoSpaceK
       setError(err.message || 'An error occurred during orchestration.');
     } finally {
       setIsPlanning(false);
-      // Ensure progress remains at 100% after completion
       setCurrentStep(planSteps.length - 1);
     }
   };

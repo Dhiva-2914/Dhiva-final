@@ -145,6 +145,12 @@ export interface SaveToConfluenceResponse {
   message?: string;
 }
 
+export interface PageWithType {
+  id: string;
+  title: string;
+  content_type: string;
+}
+
 class ApiService {
   private getSelectedApiKey(): string | undefined {
     if (typeof window !== 'undefined' && localStorage.getItem('selectedApiKeyId')) {
@@ -294,5 +300,11 @@ export async function analyzeGoal(goal: string, availablePages: string[]) {
     body: JSON.stringify({ goal, available_pages: availablePages }),
   });
   if (!res.ok) throw new Error('Failed to analyze goal');
+  return res.json();
+} 
+
+export async function getPagesWithType(spaceKey: string): Promise<{ pages: PageWithType[] }> {
+  const res = await fetch(`${API_BASE_URL}/pages-with-type/${spaceKey}`);
+  if (!res.ok) throw new Error('Failed to fetch pages with type');
   return res.json();
 } 

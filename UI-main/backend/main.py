@@ -1396,6 +1396,38 @@ async def test_endpoint():
     """Test endpoint to verify backend is working"""
     return {"message": "Backend is working", "status": "ok"}
 
+@app.get("/pages-with-type/{space_key}")
+async def get_pages_with_type(space_key: Optional[str] = None):
+    """Get all pages from a specific space, with detected content type (code, text, video, image, etc.)"""
+    try:
+        confluence = init_confluence()
+        space_key = auto_detect_space(confluence, space_key)
+        pages = confluence.get_all_pages_from_space(space=space_key, start=0, limit=100)
+        result = []
+        for p in pages:
+            page_id = p["id"]
+            page_title = p["title"]
+            page_data = confluence.get_page_by_id(page_id, expand="body.storage")
+            raw_html = page_data["body"]["storage"]["value"]
+            soup = BeautifulSoup(raw_html, "html.parser")
+            # Heuristic: check for code, video, image, or text
+            if soup.find(['pre', 'code']) or soup.find('ac:structured-macro', {'ac:name': 'code'}):
+                content_type = 'code'
+            elif soup.find('ac:structured-macro', {'ac:name': 'widget'}) and 'video' in raw_html.lower():
+                content_type = 'video'
+            elif soup.find('img') or soup.find('ac:image'):
+                content_type = 'image'
+            else:
+                content_type = 'text'
+            result.append({
+                'id': page_id,
+                'title': page_title,
+                'content_type': content_type
+            })
+        return {'pages': result}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 def get_actual_api_key_from_identifier(identifier: str) -> str:
     if identifier and identifier.startswith('GENAI_API_KEY_'):
         key = os.getenv(identifier)

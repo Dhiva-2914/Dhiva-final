@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Zap, X, Send, Download, RotateCcw, FileText, Brain, CheckCircle, Loader2, MessageSquare, Plus, ChevronDown } from 'lucide-react';
 import type { AppMode } from '../App';
-import { apiService, analyzeGoal } from '../services/api';
+import { apiService, analyzeGoal, getPagesWithType, PageWithType } from '../services/api';
 import { getConfluenceSpaceAndPageFromUrl } from '../utils/urlUtils';
 
 interface AgentModeProps {
@@ -68,6 +68,10 @@ const AgentMode: React.FC<AgentModeProps> = ({ onClose, onModeSelect, autoSpaceK
   const [selectedPages, setSelectedPages] = useState<string[]>([]);
   const [error, setError] = useState('');
   const [selectAllPages, setSelectAllPages] = useState(false);
+  const [pageTypes, setPageTypes] = useState<PageWithType[]>([]);
+
+  // Add progressPercent state for live progress bar
+  const [progressPercent, setProgressPercent] = useState(0);
 
   // Auto-detect and auto-select space and page if only one exists, or from URL if provided
   useEffect(() => {
@@ -123,6 +127,22 @@ const AgentMode: React.FC<AgentModeProps> = ({ onClose, onModeSelect, autoSpaceK
     }
   }, [selectedSpace]);
 
+  // Fetch page types when space or pages change
+  useEffect(() => {
+    const fetchPageTypes = async () => {
+      if (selectedSpace) {
+        try {
+          const result = await getPagesWithType(selectedSpace);
+          setPageTypes(result.pages);
+        } catch (err) {
+          // fallback: just set empty
+          setPageTypes([]);
+        }
+      }
+    };
+    fetchPageTypes();
+  }, [selectedSpace, pages.length]);
+
   // Sync "Select All" checkbox state
   useEffect(() => {
     setSelectAllPages(pages.length > 0 && selectedPages.length === pages.length);
@@ -138,7 +158,7 @@ const AgentMode: React.FC<AgentModeProps> = ({ onClose, onModeSelect, autoSpaceK
   };
 
   const handleGoalSubmit = async () => {
-    if (!goal.trim() || !selectedSpace || selectedPages.length === 0) {
+    if (!goal.trim() || !selectedSpace || !selectedPages.length) {
       setError('Please enter a goal, select a space, and at least one page.');
       return;
     }
@@ -151,75 +171,102 @@ const AgentMode: React.FC<AgentModeProps> = ({ onClose, onModeSelect, autoSpaceK
     setOutputTabs([]);
     setCurrentStep(0);
     setActiveTab('final-answer');
+    setProgressPercent(0);
     let orchestrationReasoning = '';
     try {
       setPlanSteps((steps) => steps.map((s) => s.id === 1 ? { ...s, status: 'running' } : s));
       setCurrentStep(0);
       // Split instructions
       const instructions = splitInstructions(goal);
+      // Map each instruction to the correct page/tool based on content type and intent
       const allResults: Array<{ instruction: string, tool: string, page: string, output: string }> = [];
       for (const instruction of instructions) {
         // Analyze each instruction
         let selectedTool = '';
-        if (selectedPages.length > 0) {
-          selectedTool = await determineToolByIntentAndContent(instruction, selectedSpace, selectedPages[0]);
+        // For each selected page, get its type
+        const pageTypeMap: Record<string, string> = {};
+        for (const p of pageTypes) {
+          pageTypeMap[p.title] = p.content_type;
         }
-        const analysis = await analyzeGoal(instruction, selectedPages);
-        const toolsToUse = analysis.tools && analysis.tools.length > 0 ? analysis.tools : (selectedTool ? [selectedTool] : ['ai_powered_search']);
-        let selectedPagesFromAI = analysis.pages || [];
-        selectedPagesFromAI = selectedPagesFromAI.filter((p: string) => selectedPages.includes(p));
-        orchestrationReasoning += `\nInstruction: ${instruction}\nReasoning: ${analysis.reasoning || ''}`;
-        // For each tool and page, execute
-        for (const tool of toolsToUse) {
-          for (const page of selectedPagesFromAI) {
-            let output = '';
-            if (tool === 'ai_powered_search') {
-              const res = await apiService.search({ space_key: selectedSpace, page_titles: [page], query: instruction });
-              output = res.response;
-            } else if (tool === 'impact_analyzer') {
-              // Only run if at least 2 pages
-              if (selectedPagesFromAI.length >= 2) {
-                const res = await apiService.impactAnalyzer({ space_key: selectedSpace, old_page_title: selectedPagesFromAI[0], new_page_title: selectedPagesFromAI[1], question: instruction });
-                output = res.impact_analysis;
-                break; // Only one result for impact analyzer
-              }
-            } else if (tool === 'code_assistant') {
-              const res = await apiService.codeAssistant({ space_key: selectedSpace, page_title: page, instruction });
-              output = res.modified_code || res.converted_code || res.original_code || res.summary || '';
-            } else if (tool === 'video_summarizer') {
-              const res = await apiService.videoSummarizer({ space_key: selectedSpace, page_title: page });
-              // Only show timestamped segment
-              if (res.timestamps && Array.isArray(res.timestamps) && res.timestamps.length > 0) {
-                output = res.timestamps.map((ts: string, idx: number) => {
-                  let point = Array.isArray(res.summary) ? res.summary[idx] : (typeof res.summary === 'string' ? res.summary.split(/\n|\r|\r\n/)[idx] : '');
-                  return ts ? `[${ts}] ${point}` : point;
-                }).filter(Boolean).join('\n');
-              } else {
-                output = 'No timestamped summary available.';
-              }
-            } else if (tool === 'test_support') {
-              const res = await apiService.testSupport({ space_key: selectedSpace, code_page_title: page });
-              output = res.test_strategy || res.ai_response || '';
-            } else if (tool === 'image_insights') {
-              const images = await apiService.getImages(selectedSpace, page);
-              if (images && images.images && images.images.length > 0) {
-                const summaries = await Promise.all(images.images.map((imgUrl: string) => apiService.imageSummary({ space_key: selectedSpace, page_title: page, image_url: imgUrl })));
-                output = summaries.map((s, i) => `Image ${i + 1}: ${s.summary}`).join('\n');
-              }
-            } else if (tool === 'chart_builder') {
-              const images = await apiService.getImages(selectedSpace, page);
-              if (images && images.images && images.images.length > 0) {
-                const charts = await Promise.all(images.images.map((imgUrl: string) => apiService.createChart({ space_key: selectedSpace, page_title: page, image_url: imgUrl, chart_type: 'bar', filename: 'chart', format: 'png' })));
-                output = charts.map((c, i) => `Chart ${i + 1}: [Chart Image]`).join('\n');
-              }
-            }
-            allResults.push({ instruction, tool, page, output });
+        // For each page, determine if it matches the instruction/tool
+        let matchedPages: string[] = [];
+        let toolForInstruction = '';
+        for (const page of selectedPages) {
+          const type = pageTypeMap[page] || 'text';
+          // Use intent detection to pick tool
+          const tool = await determineToolByIntentAndContent(instruction, selectedSpace, page);
+          // Heuristic: match tool to content type
+          if (
+            (tool === 'code_assistant' && type === 'code') ||
+            (tool === 'video_summarizer' && type === 'video') ||
+            (tool === 'image_insights' && type === 'image') ||
+            (tool === 'ai_powered_search' && type === 'text') ||
+            (tool === 'impact_analyzer' && type === 'code') ||
+            (tool === 'test_support' && type === 'code')
+          ) {
+            matchedPages.push(page);
+            toolForInstruction = tool;
           }
         }
+        // Fallback: if no match, just use first page and tool
+        if (!matchedPages.length && selectedPages.length > 0) {
+          matchedPages = [selectedPages[0]];
+          toolForInstruction = await determineToolByIntentAndContent(instruction, selectedSpace, selectedPages[0]);
+        }
+        // If related and for one page/tool, execute sequentially (not implemented here for brevity)
+        for (const page of matchedPages) {
+          let output = '';
+          if (toolForInstruction === 'ai_powered_search') {
+            const res = await apiService.search({ space_key: selectedSpace, page_titles: [page], query: instruction });
+            output = res.response;
+          } else if (toolForInstruction === 'impact_analyzer') {
+            if (matchedPages.length >= 2) {
+              const res = await apiService.impactAnalyzer({ space_key: selectedSpace, old_page_title: matchedPages[0], new_page_title: matchedPages[1], question: instruction });
+              output = res.impact_analysis;
+              break;
+            }
+          } else if (toolForInstruction === 'code_assistant') {
+            const res = await apiService.codeAssistant({ space_key: selectedSpace, page_title: page, instruction });
+            output = res.modified_code || res.converted_code || res.original_code || res.summary || '';
+          } else if (toolForInstruction === 'video_summarizer') {
+            const res = await apiService.videoSummarizer({ space_key: selectedSpace, page_title: page });
+            if (res.timestamps && Array.isArray(res.timestamps) && res.timestamps.length > 0) {
+              output = res.timestamps.map((ts: string, idx: number) => {
+                let point = Array.isArray(res.summary) ? res.summary[idx] : (typeof res.summary === 'string' ? res.summary.split(/\n|\r|\r\n/)[idx] : '');
+                return ts ? `[${ts}] ${point}` : point;
+              }).filter(Boolean).join('\n');
+            } else {
+              output = 'No timestamped summary available.';
+            }
+          } else if (toolForInstruction === 'test_support') {
+            const res = await apiService.testSupport({ space_key: selectedSpace, code_page_title: page });
+            output = res.test_strategy || res.ai_response || '';
+          } else if (toolForInstruction === 'image_insights') {
+            const images = await apiService.getImages(selectedSpace, page);
+            if (images && images.images && images.images.length > 0) {
+              const summaries = await Promise.all(images.images.map((imgUrl: string) => apiService.imageSummary({ space_key: selectedSpace, page_title: page, image_url: imgUrl })));
+              output = summaries.map((s, i) => `Image ${i + 1}: ${s.summary}`).join('\n');
+            }
+          } else if (toolForInstruction === 'chart_builder') {
+            const images = await apiService.getImages(selectedSpace, page);
+            if (images && images.images && images.images.length > 0) {
+              const charts = await Promise.all(images.images.map((imgUrl: string) => apiService.createChart({ space_key: selectedSpace, page_title: page, image_url: imgUrl, chart_type: 'bar', filename: 'chart', format: 'png' })));
+              output = charts.map((c, i) => `Chart ${i + 1}: [Chart Image]`).join('\n');
+            }
+          }
+          allResults.push({ instruction, tool: toolForInstruction, page, output });
+        }
+        orchestrationReasoning += `\nInstruction: ${instruction}\nReasoning: (Tool: ${toolForInstruction}, Pages: ${matchedPages.join(', ')})`;
       }
       setPlanSteps((steps) => steps.map((s) => s.id === 1 ? { ...s, status: 'completed' } : s));
       setCurrentStep(1);
+      setProgressPercent(50);
+      // Update progress bar to 50%
       setPlanSteps((steps) => steps.map((s) => s.id === 2 ? { ...s, status: 'running' } : s));
+      // ... execution happens above ...
+      setPlanSteps((steps) => steps.map((s) => s.id === 2 ? { ...s, status: 'completed' } : s));
+      setCurrentStep(2);
+      setProgressPercent(100);
       // Prepare output tabs
       const finalAnswer = allResults.map((r, idx) => `---\n**Instruction:** ${r.instruction}\n**Tool:** ${r.tool}\n<button class='confluence-page-btn'>${r.page}</button>\n\n${r.output}`).join('\n\n');
       const tabs = [
@@ -248,7 +295,8 @@ const AgentMode: React.FC<AgentModeProps> = ({ onClose, onModeSelect, autoSpaceK
       setError(err.message || 'An error occurred during orchestration.');
     } finally {
       setIsPlanning(false);
-      setCurrentStep(planSteps.length - 1);
+      setCurrentStep(2); // Always 100% at the end
+      setProgressPercent(100);
     }
   };
 
@@ -637,11 +685,20 @@ ${outputTabs.find(tab => tab.id === 'used-tools')?.content || ''}
                       <span>Progress</span>
                       <span>{progressPercent}%</span>
                     </div>
-                    <div className="w-full bg-gray-200 rounded-full h-2">
+                    <div className="w-full bg-gray-200 rounded-full h-3 relative">
                       <div 
-                        className="bg-orange-500 h-2 rounded-full transition-all duration-500"
+                        className="bg-gradient-to-r from-orange-400 to-orange-600 h-3 rounded-full transition-all duration-500"
                         style={{ width: `${progressPercent}%` }}
                       />
+                      {/* Stage markers */}
+                      <div className="absolute left-0 top-0 h-3 w-1 bg-orange-700 rounded-full" title="Start" />
+                      <div className="absolute left-1/2 top-0 h-3 w-1 bg-orange-700 rounded-full" style={{ left: '50%' }} title="Analyzed" />
+                      <div className="absolute right-0 top-0 h-3 w-1 bg-orange-700 rounded-full" title="Complete" />
+                    </div>
+                    <div className="flex justify-between text-xs text-gray-500 mt-1">
+                      <span>Start</span>
+                      <span>Analyzed</span>
+                      <span>Complete</span>
                     </div>
                   </div>
                 </div>

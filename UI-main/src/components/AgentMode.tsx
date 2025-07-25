@@ -416,6 +416,18 @@ const AgentMode: React.FC<AgentModeProps> = ({ onClose, onModeSelect, autoSpaceK
         content: '',
         results: impactResults,
       } : null;
+      const testStrategyResults: Array<{ strategy: string }> = [];
+      for (const page of selectedPages) {
+        const res = await apiService.testSupport({ space_key: selectedSpace, code_page_title: page });
+        testStrategyResults.push({ strategy: res.test_strategy || res.ai_response || '' });
+      }
+      const testStrategyTab = testStrategyResults.length > 0 ? {
+        id: 'test-strategy',
+        label: 'Test Strategy',
+        icon: FileText,
+        content: '',
+        results: testStrategyResults,
+      } : null;
       const pageTabs = Object.keys(pageResults).length > 0 ? [
         {
           id: 'per-page-results',
@@ -427,6 +439,7 @@ const AgentMode: React.FC<AgentModeProps> = ({ onClose, onModeSelect, autoSpaceK
       ] : [];
       const tabs = [
         ...(impactTab ? [impactTab] : []),
+        ...(testStrategyTab ? [testStrategyTab] : []),
         ...pageTabs,
         {
           id: 'reasoning',
@@ -442,7 +455,7 @@ const AgentMode: React.FC<AgentModeProps> = ({ onClose, onModeSelect, autoSpaceK
         },
       ];
       setOutputTabs(tabs);
-      setActiveTab(impactTab ? 'impact-analysed' : (pageTabs.length > 0 ? 'per-page-results' : 'reasoning'));
+      setActiveTab(impactTab ? 'impact-analysed' : testStrategyTab ? 'test-strategy' : (pageTabs.length > 0 ? 'per-page-results' : 'reasoning'));
       setActiveResult(null);
     } catch (err: any) {
       setError(err.message || 'An error occurred during orchestration.');
@@ -867,17 +880,36 @@ ${outputTabs.find(tab => tab.id === 'used-tools')?.content || ''}
                         <div className="prose prose-sm max-w-none">
                           {activeTab === 'impact-analysed' ? (
                             <div>
-                              <button className="px-4 py-2 bg-orange-500 text-white rounded" onClick={() => setActiveResult(activeResult && activeResult.type === 'impact' ? null : { type: 'impact', key: (outputTabs.find(t => t.id === 'impact-analysed')?.results?.[0]?.page || '') })}>
+                              <button className="px-4 py-2 bg-orange-500 text-white rounded" onClick={() => setActiveResult(activeResult && activeResult.type === 'impact' ? null : { type: 'impact', key: outputTabs.find(t => t.id === 'impact-analysed')?.results?.[0]?.page || '' })}>
                                 Impact Analysed
                               </button>
                               {activeResult && activeResult.type === 'impact' && (
                                 <div className="mt-4">
-                                  <select value={activeResult.key} onChange={e => setActiveResult({ type: 'impact', key: e.target.value })} className="mb-2 p-2 border rounded">
-                                    {(outputTabs.find(t => t.id === 'impact-analysed')?.results || []).map((r: { page: string }) => <option key={r.page} value={r.page}>{r.page}</option>)}
-                                  </select>
-                                  <div className="whitespace-pre-wrap text-gray-700 border rounded p-4 bg-white/80">
-                                    {(outputTabs.find(t => t.id === 'impact-analysed')?.results || []).find((r: { page: string }) => r.page === activeResult.key)?.result}
+                                  {/* Use ImpactMetricsAndRisk for the first (or only) result */}
+                                  {(() => {
+                                    const r = outputTabs.find(t => t.id === 'impact-analysed')?.results?.[0];
+                                    if (!r) return null;
+                                    return <ImpactMetricsAndRisk metrics={r.metrics} riskScore={r.riskRating} riskLevel={r.riskLevel} />;
+                                  })()}
+                                  <div className="whitespace-pre-wrap text-gray-700 border rounded p-4 bg-white/80 mt-4">
+                                    {outputTabs.find(t => t.id === 'impact-analysed')?.results?.[0]?.result}
                                   </div>
+                                </div>
+                              )}
+                            </div>
+                          ) : activeTab === 'test-strategy' ? (
+                            <div>
+                              <button className="px-4 py-2 bg-confluence-blue text-white rounded" onClick={() => setActiveResult(activeResult && activeResult.type === 'test-strategy' ? null : { type: 'test-strategy', key: 'test-strategy' })}>
+                                Test Strategy
+                              </button>
+                              {activeResult && activeResult.type === 'test-strategy' && (
+                                <div className="mt-4">
+                                  {/* Use TestStrategyOutput for the first (or only) result */}
+                                  {(() => {
+                                    const r = outputTabs.find(t => t.id === 'test-strategy')?.results?.[0];
+                                    if (!r) return null;
+                                    return <TestStrategyOutput strategy={r.strategy} />;
+                                  })()}
                                 </div>
                               )}
                             </div>

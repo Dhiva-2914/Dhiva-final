@@ -551,21 +551,6 @@ ${outputTabs.find(tab => tab.id === 'used-tools')?.content || ''}
         </div>
 
         <div className="p-6 overflow-y-auto max-h-[calc(90vh-200px)]">
-          {/* Auto-detected Space and Page Info */}
-          {!planSteps.length && !isPlanning && (
-            <div className="max-w-4xl mx-auto mb-6">
-              <div className="bg-white/60 backdrop-blur-xl rounded-xl p-6 border border-white/20 shadow-lg text-center">
-                <h3 className="text-xl font-bold text-gray-800 mb-4">Detected Confluence Context</h3>
-                {selectedSpace && selectedPages.length === 1 && (
-                  <div className="mb-4 text-green-700 font-semibold">
-                    Auto-selected: Space <span className="font-bold">{spaces.find(s => s.key === selectedSpace)?.name || selectedSpace}</span> &nbsp;|&nbsp; Page <span className="font-bold">{selectedPages[0]}</span>
-                  </div>
-                )}
-                {error && <p className="text-red-500 text-sm mt-2">{error}</p>}
-              </div>
-            </div>
-          )}
-
           {/* Manual Space/Page Selection UI */}
           {!planSteps.length && !isPlanning && (
             <div className="max-w-4xl mx-auto mb-6">

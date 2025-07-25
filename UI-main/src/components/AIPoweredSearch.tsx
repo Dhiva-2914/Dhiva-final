@@ -32,7 +32,6 @@ const AIPoweredSearch: React.FC<AIPoweredSearchProps> = ({
   const [pages, setPages] = useState<string[]>([]);
   const [error, setError] = useState('');
   const [showToast, setShowToast] = useState(false);
-  const [hoveredFeature, setHoveredFeature] = useState<string | null>(null);
 
   const toggleSelectAllPages = () => {
     if (selectAllPages) {
@@ -197,8 +196,6 @@ const AIPoweredSearch: React.FC<AIPoweredSearchProps> = ({
                     <div key={feature.id} className="relative">
                       <button
                         onClick={() => onFeatureSelect(feature.id)}
-                        onMouseEnter={() => setHoveredFeature(feature.id)}
-                        onMouseLeave={() => setHoveredFeature(null)}
                         className={`flex items-center space-x-2 px-4 py-2 rounded-lg backdrop-blur-sm border transition-all duration-200 whitespace-nowrap flex-shrink-0 ${
                           isActive
                             ? 'bg-white/90 text-confluence-blue shadow-lg border-white/30'
@@ -208,14 +205,6 @@ const AIPoweredSearch: React.FC<AIPoweredSearchProps> = ({
                         <Icon className="w-4 h-4" />
                         <span className="text-sm font-medium">{feature.label}</span>
                       </button>
-                      {/* Tooltip */}
-                      {hoveredFeature === feature.id && (
-                        <div className="absolute left-1/2 -translate-x-1/2 mt-2 z-50 pointer-events-none">
-                          <div className="bg-gray-900 text-white text-xs rounded-lg px-3 py-2 shadow-lg whitespace-pre-line min-w-[180px] text-center opacity-90">
-                            {featureTooltips[feature.id]}
-                          </div>
-                        </div>
-                      )}
                     </div>
                   );
                 })}

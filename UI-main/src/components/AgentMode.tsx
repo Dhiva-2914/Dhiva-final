@@ -3,6 +3,8 @@ import { Zap, X, Send, Download, RotateCcw, FileText, Brain, CheckCircle, Loader
 import type { AppMode } from '../App';
 import { apiService, analyzeGoal, getPagesWithType, PageWithType } from '../services/api';
 import { getConfluenceSpaceAndPageFromUrl } from '../utils/urlUtils';
+// Fix import for toolOutputFormatters
+import { formatAIPoweredSearchOutput, formatCodeAssistantOutput, formatTestSupportOutput, formatImpactAnalyzerOutput, formatImageInsightsOutput, formatVideoSummarizerOutput } from '../utils/toolOutputFormatters';
 
 interface AgentModeProps {
   onClose: () => void;
@@ -765,7 +767,14 @@ ${outputTabs.find(tab => tab.id === 'used-tools')?.content || ''}
     setOutputTabs([]);
     setShowFollowUp(false);
     setActiveTab('answer');
-    handleGoalSubmit();
+    setGoal(''); // Reset goal
+    setSelectedPages([]); // Reset selected pages
+    setSelectedSpace(''); // Reset selected space
+    setError(''); // Clear any previous errors
+    setIsPlanning(false); // Reset planning state
+    setIsExecuting(false); // Reset executing state
+    setProgressPercent(0); // Reset progress
+    setActiveResult(null); // Reset active result
   };
 
   return (
@@ -1103,7 +1112,7 @@ ${outputTabs.find(tab => tab.id === 'used-tools')?.content || ''}
                 className="px-6 py-3 bg-white/80 text-orange-600 rounded-lg hover:bg-orange-100 transition-colors font-semibold shadow-md border border-orange-200/50"
               >
                 <RotateCcw className="w-5 h-5 inline-block mr-2" />
-                Replay Steps
+                Back to Chat
               </button>
             </div>
           )}

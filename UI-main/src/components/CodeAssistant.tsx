@@ -15,7 +15,7 @@ interface CodeAssistantProps {
 
 const CodeAssistant: React.FC<CodeAssistantProps> = ({ onClose, onFeatureSelect, onModeSelect, autoSpaceKey, isSpaceAutoConnected }) => {
   const [selectedSpace, setSelectedSpace] = useState('');
-  const [selectedPage, setSelectedPage] = useState('');
+  const [selectedPages, setSelectedPages] = useState<string[]>([]);
   const [spaces, setSpaces] = useState<Space[]>([]);
   const [pages, setPages] = useState<string[]>([]);
   const [detectedCode, setDetectedCode] = useState('');
@@ -94,10 +94,10 @@ const CodeAssistant: React.FC<CodeAssistantProps> = ({ onClose, onFeatureSelect,
       setError('');
       const result = await apiService.getPages(selectedSpace);
       setPages(result.pages);
-      // Auto-select page if present in URL
+      // Auto-select pages if present in URL
       const { page } = getConfluenceSpaceAndPageFromUrl();
-      if (page && result.pages.includes(page)) {
-        setSelectedPage(page);
+      if (page) {
+        setSelectedPages(Array.isArray(page) ? page : [page]);
       }
     } catch (err) {
       setError('Failed to load pages. Please check your space key.');
@@ -106,7 +106,14 @@ const CodeAssistant: React.FC<CodeAssistantProps> = ({ onClose, onFeatureSelect,
   };
 
   const handlePageSelect = async (pageTitle: string) => {
-    setSelectedPage(pageTitle);
+    setSelectedPages(prev => {
+      const newSelected = [...prev];
+      if (newSelected.includes(pageTitle)) {
+        return newSelected.filter(p => p !== pageTitle);
+      } else {
+        return [...newSelected, pageTitle];
+      }
+    });
     setIsProcessing(true);
     setError('');
 
@@ -130,8 +137,8 @@ const CodeAssistant: React.FC<CodeAssistantProps> = ({ onClose, onFeatureSelect,
 
   // Update processCode to handle AI actions and outputs
   const processCode = async () => {
-    if (!selectedSpace || !selectedPage) {
-      setError('Please select a space and page.');
+    if (!selectedSpace || selectedPages.length === 0) {
+      setError('Please select a space and at least one page.');
       return;
     }
 
@@ -159,7 +166,7 @@ const CodeAssistant: React.FC<CodeAssistantProps> = ({ onClose, onFeatureSelect,
         // 1. Convert code to target language
         const conversionResult = await apiService.codeAssistant({
           space_key: selectedSpace,
-          page_title: selectedPage,
+          page_title: selectedPages[0], // Assuming the first selected page for conversion
           instruction: '',
           target_language: targetLanguage
         });
@@ -167,7 +174,7 @@ const CodeAssistant: React.FC<CodeAssistantProps> = ({ onClose, onFeatureSelect,
         // 2. Apply modification instruction to converted code
         const modResult = await apiService.codeAssistant({
           space_key: selectedSpace,
-          page_title: selectedPage,
+          page_title: selectedPages[0], // Assuming the first selected page for modification
           instruction: `${instruction}\n\n${convertedCode}`,
           target_language: '',
         });
@@ -189,7 +196,7 @@ const CodeAssistant: React.FC<CodeAssistantProps> = ({ onClose, onFeatureSelect,
         }
         const actionResult = await apiService.codeAssistant({
           space_key: selectedSpace,
-          page_title: selectedPage,
+          page_title: selectedPages[0], // Assuming the first selected page for action
           instruction: prompt
         });
         setAiActionOutput(actionResult.modified_code || actionResult.converted_code || actionResult.original_code || 'AI action completed successfully.');
@@ -202,7 +209,7 @@ const CodeAssistant: React.FC<CodeAssistantProps> = ({ onClose, onFeatureSelect,
         // 1. Convert code to target language
         const conversionResult = await apiService.codeAssistant({
           space_key: selectedSpace,
-          page_title: selectedPage,
+          page_title: selectedPages[0], // Assuming the first selected page for conversion
           instruction: '',
           target_language: targetLanguage
         });
@@ -210,7 +217,7 @@ const CodeAssistant: React.FC<CodeAssistantProps> = ({ onClose, onFeatureSelect,
         // 2. Apply modification instruction to converted code
         const modResult = await apiService.codeAssistant({
           space_key: selectedSpace,
-          page_title: selectedPage,
+          page_title: selectedPages[0], // Assuming the first selected page for modification
           instruction: `${instruction}\n\n${convertedCode}`,
           target_language: '',
         });
@@ -226,7 +233,7 @@ const CodeAssistant: React.FC<CodeAssistantProps> = ({ onClose, onFeatureSelect,
         // 1. Convert code to target language
         const conversionResult = await apiService.codeAssistant({
           space_key: selectedSpace,
-          page_title: selectedPage,
+          page_title: selectedPages[0], // Assuming the first selected page for conversion
           instruction: '',
           target_language: targetLanguage
         });
@@ -250,7 +257,7 @@ const CodeAssistant: React.FC<CodeAssistantProps> = ({ onClose, onFeatureSelect,
         }
         const actionResult = await apiService.codeAssistant({
           space_key: selectedSpace,
-          page_title: selectedPage,
+          page_title: selectedPages[0], // Assuming the first selected page for action
           instruction: prompt
         });
         setAiActionOutput(actionResult.modified_code || actionResult.converted_code || actionResult.original_code || 'AI action completed successfully.');
@@ -267,7 +274,7 @@ const CodeAssistant: React.FC<CodeAssistantProps> = ({ onClose, onFeatureSelect,
       if (hasModificationInstruction || hasTargetLanguage) {
         const result = await apiService.codeAssistant({
           space_key: selectedSpace,
-          page_title: selectedPage,
+          page_title: selectedPages[0], // Assuming the first selected page for processing
           instruction: instruction,
           target_language: targetLanguage || undefined
         });
@@ -318,7 +325,7 @@ const CodeAssistant: React.FC<CodeAssistantProps> = ({ onClose, onFeatureSelect,
       // For now, we'll use the same API service but with a special instruction
       const result = await apiService.codeAssistant({
         space_key: selectedSpace,
-        page_title: selectedPage,
+        page_title: selectedPages[0], // Assuming the first selected page for action
         instruction: prompt
       });
 
@@ -445,16 +452,16 @@ const CodeAssistant: React.FC<CodeAssistantProps> = ({ onClose, onFeatureSelect,
                 {/* Page Selection */}
                 <div className="mb-4">
                   <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Select Code Page
+                    Select Code Pages
                   </label>
                   <div className="relative">
                     <select
-                      value={selectedPage}
-                      onChange={(e) => handlePageSelect(e.target.value)}
+                      multiple
+                      value={selectedPages}
+                      onChange={(e) => setSelectedPages(Array.from(e.target.options).filter(option => option.selected).map(option => option.value))}
                       className="w-full p-3 border border-white/30 rounded-lg focus:ring-2 focus:ring-confluence-blue focus:border-confluence-blue appearance-none bg-white/70 backdrop-blur-sm"
                       disabled={!selectedSpace}
                     >
-                      <option value="">Choose a page...</option>
                       {pages.map(page => (
                         <option key={page} value={page}>{page}</option>
                       ))}
@@ -535,7 +542,7 @@ const CodeAssistant: React.FC<CodeAssistantProps> = ({ onClose, onFeatureSelect,
                 {/* Process Button */}
                 <button
                   onClick={processCode}
-                  disabled={!selectedSpace || !selectedPage || isProcessing}
+                  disabled={!selectedSpace || selectedPages.length === 0 || isProcessing}
                   className="w-full bg-confluence-blue/90 backdrop-blur-sm text-white py-3 px-4 rounded-lg hover:bg-confluence-blue disabled:bg-gray-300 disabled:cursor-not-allowed flex items-center justify-center space-x-2 transition-colors border border-white/10"
                 >
                   {isProcessing ? (
@@ -666,13 +673,13 @@ const CodeAssistant: React.FC<CodeAssistantProps> = ({ onClose, onFeatureSelect,
                         onClick={async () => {
                           const { space, page } = getConfluenceSpaceAndPageFromUrl();
                           if (!space || !page) {
-                            alert('Confluence space or page not specified in macro src URL.');
+                            alert('Confluence space or pages not specified in macro src URL.');
                             return;
                           }
                           try {
                             await apiService.saveToConfluence({
                               space_key: space,
-                              page_title: page,
+                              page_title: Array.isArray(page) ? page[0] : page, // Save to the first selected page
                               content: processedCode || '',
                             });
                             setShowToast(true);

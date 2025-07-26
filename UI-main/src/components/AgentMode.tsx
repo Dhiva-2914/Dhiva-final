@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Zap, X, Send, Download, RotateCcw, FileText, Brain, CheckCircle, Loader2, MessageSquare, Plus, ChevronDown, TrendingUp, TestTube } from 'lucide-react';
+import { Zap, X, Send, Download, RotateCcw, FileText, Brain, CheckCircle, Loader2, MessageSquare, Plus, ChevronDown, TrendingUp, TestTube, Video } from 'lucide-react';
 import type { AppMode } from '../App';
 import { apiService, analyzeGoal, getPagesWithType, PageWithType } from '../services/api';
 import { getConfluenceSpaceAndPageFromUrl } from '../utils/urlUtils';
@@ -36,9 +36,10 @@ const determineToolByIntentAndContent = async (goal: string, space: string, page
   // Intent-based routing
   if (/impact|change|difference|diff/.test(lowerGoal)) return 'impact_analyzer';
   if (/test|qa|test case|unit test/.test(lowerGoal)) return 'test_support';
-  if (/convert|debug|refactor|fix|bug|error|optimize|performance|documentation|docs|comment|dead code|unused|logging|log|summarize|summary/.test(lowerGoal)) return 'code_assistant';
-  if (/video|summarize.*video|transcribe/.test(lowerGoal)) return 'video_summarizer';
-  if (/image|chart|diagram|visual/.test(lowerGoal)) return 'image_insights';
+  if (/convert|debug|refactor|fix|bug|error|optimize|performance|documentation|docs|comment|dead code|unused|logging|log/.test(lowerGoal)) return 'code_assistant';
+  if (/video|summarize.*video|transcribe|video.*summarize/.test(lowerGoal)) return 'video_summarizer';
+  if (/image|chart|diagram|visual|image.*summarize|summarize.*image/.test(lowerGoal)) return 'image_insights';
+  if (/summarize|summary/.test(lowerGoal)) return 'ai_powered_search';
   // Default
   return 'ai_powered_search';
 };
@@ -411,25 +412,40 @@ const AgentMode: React.FC<AgentModeProps> = ({ onClose, onModeSelect, autoSpaceK
             toolsTriggered.push('AI Powered Search');
             whyUsed.push(`AI Powered Search was used to analyze and summarize the content on page "${page}".`);
             howDerived.push(`The content was processed using natural language processing to extract key information and provide comprehensive summaries.`);
-          } else if (tool === 'video_summarizer' && type === 'video') {
-            // Summarization for video
+          } else if (tool === 'video_summarizer') {
+            // Video summarization using exact same logic as Tool Mode
             const res = await apiService.videoSummarizer({ space_key: selectedSpace, page_title: page });
-            let output = '';
-            if (res.timestamps && Array.isArray(res.timestamps) && res.timestamps.length > 0) {
-              output = res.timestamps.map((ts: string, idx: number) => {
-                let point = Array.isArray(res.summary) ? res.summary[idx] : (typeof res.summary === 'string' ? res.summary.split(/\n|\r|\r\n/)[idx] : '');
-                return ts ? `[${ts}] ${point}` : point;
-              }).filter(Boolean).join('\n');
-            } else {
-              output = 'No timestamped summary available.';
-            }
-            outputs.push(output);
-            formattedOutput = formatVideoSummarizerOutput({
+            
+            // Create video content object similar to Tool Mode
+            const videoContent = {
+              id: Date.now().toString(),
               name: page,
-              summary: output,
-              timestamps: res.timestamps || [],
-              quotes: res.quotes || []
+              summary: res.summary,
+              quotes: res.quotes,
+              timestamps: res.timestamps,
+              qa: res.qa
+            };
+            
+            // Format output using the same structure as Tool Mode
+            let summaryText = videoContent.summary || 'No summary available.';
+            let quotesText = videoContent.quotes && videoContent.quotes.length > 0 
+              ? `\n\nKey Quotes:\n${videoContent.quotes.map(quote => `- "${quote}"`).join('\n')}`
+              : '';
+            let timestampsText = videoContent.timestamps && videoContent.timestamps.length > 0
+              ? `\n\nTimestamps:\n${videoContent.timestamps.map(ts => `- ${ts}`).join('\n')}`
+              : '';
+            
+            const fullOutput = `${summaryText}${quotesText}${timestampsText}`;
+            outputs.push(fullOutput);
+            
+            // Use the existing formatter function to maintain consistency
+            formattedOutput = formatVideoSummarizerOutput({
+              name: videoContent.name,
+              summary: videoContent.summary,
+              timestamps: videoContent.timestamps || [],
+              quotes: videoContent.quotes || []
             });
+            
             toolsTriggered.push('Video Summarizer');
             whyUsed.push(`Video Summarizer was used to analyze and summarize the video content on page "${page}".`);
             howDerived.push(`The video was processed using AI-powered analysis to extract key moments, timestamps, and comprehensive summaries.`);

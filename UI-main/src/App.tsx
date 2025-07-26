@@ -79,7 +79,7 @@ function App() {
           ) : appMode === 'tool' && activeFeature ? (
             renderActiveFeature()
           ) : appMode === 'tool' ? (
-            <AIPoweredSearch onClose={handleAppClose} onFeatureSelect={setActiveFeature} autoSpaceKey={autoSpaceKey} isSpaceAutoConnected={!!autoSpaceKey} />
+            <AIPoweredSearch onClose={handleAppClose} onFeatureSelect={setActiveFeature} onModeSelect={setAppMode} autoSpaceKey={autoSpaceKey} isSpaceAutoConnected={!!autoSpaceKey} />
           ) : null}
         </div>
       )}

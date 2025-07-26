@@ -703,4 +703,4 @@ const CodeAssistant: React.FC<CodeAssistantProps> = ({ onClose, onFeatureSelect,
   );
 };
 
-export default CodeAssistant;
+export default CodeAssistant; 

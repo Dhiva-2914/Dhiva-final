@@ -37,8 +37,6 @@ const VideoSummarizer: React.FC<VideoSummarizerProps> = ({ onClose, onFeatureSel
   const [error, setError] = useState('');
   const [isPageDropdownOpen, setIsPageDropdownOpen] = useState(false);
   const [showToast, setShowToast] = useState(false);
-  // Add selectAllPages state
-  const [selectAllPages, setSelectAllPages] = useState(false);
 
   const features = [
     { id: 'search' as const, label: 'AI Powered Search', icon: Search },
@@ -67,11 +65,6 @@ const VideoSummarizer: React.FC<VideoSummarizerProps> = ({ onClose, onFeatureSel
       loadPages();
     }
   }, [selectedSpace]);
-
-  // Sync "Select All" checkbox state
-  useEffect(() => {
-    setSelectAllPages(pages.length > 0 && selectedPages.length === pages.length);
-  }, [selectedPages, pages]);
 
   const loadSpaces = async () => {
     try {
@@ -110,17 +103,12 @@ const VideoSummarizer: React.FC<VideoSummarizerProps> = ({ onClose, onFeatureSel
     );
   };
 
-  const clearAllPages = () => {
-    setSelectedPages([]);
+  const selectAllPages = () => {
+    setSelectedPages(pages);
   };
 
-  const toggleSelectAllPages = () => {
-    if (selectAllPages) {
-      setSelectedPages([]);
-    } else {
-      setSelectedPages([...pages]);
-    }
-    setSelectAllPages(!selectAllPages);
+  const clearAllPages = () => {
+    setSelectedPages([]);
   };
 
   const processVideos = async () => {
@@ -332,75 +320,141 @@ ${video.qa?.map(qa => `**Q:** ${qa.question}\n**A:** ${qa.answer}`).join('\n\n')
         </div>
 
         <div className="p-6 overflow-y-auto max-h-[calc(90vh-200px)]">
+          {error && (
+            <div className="mb-4 p-4 bg-red-100 border border-red-400 text-red-700 rounded-lg">
+              {error}
+            </div>
+          )}
+
           {/* Video Selection Section */}
           <div className="mb-6 bg-white/60 backdrop-blur-xl rounded-xl p-6 border border-white/20 shadow-lg">
-            <h3 className="font-semibold text-gray-800 mb-4">Detected Video Content Context</h3>
-            {selectedSpace && selectedPages.length === 1 && (
-              <div className="mb-4 text-green-700 font-semibold">
-                Auto-selected: Space <span className="font-bold">{spaces.find(s => s.key === selectedSpace)?.name || selectedSpace}</span> &nbsp;|&nbsp; Page <span className="font-bold">{selectedPages[0]}</span>
+            <h3 className="font-semibold text-gray-800 mb-4">Select Video Content</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* Space Selection */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Select Confluence Space
+                </label>
+                <div className="relative">
+                  <select
+                    value={selectedSpace}
+                    onChange={(e) => setSelectedSpace(e.target.value)}
+                    className="w-full p-3 border border-white/30 rounded-lg focus:ring-2 focus:ring-confluence-blue focus:border-confluence-blue appearance-none bg-white/70 backdrop-blur-sm"
+                  >
+                    <option value="">Choose a space...</option>
+                    {spaces.map(space => (
+                      <option key={space.key} value={space.key}>{space.name} ({space.key})</option>
+                    ))}
+                  </select>
+                  <ChevronDown className="absolute right-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+                </div>
               </div>
-            )}
-            {error && (
-              <div className="mb-4 p-4 bg-red-100 border border-red-400 text-red-700 rounded-lg">
-                {error}
-              </div>
-            )}
-            {/* Space Selection */}
-            <div className="mb-4">
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Select Confluence Space
-              </label>
-              <div className="relative">
-                <select
-                  value={selectedSpace}
-                  onChange={(e) => setSelectedSpace(e.target.value)}
-                  className="w-full p-3 border border-white/30 rounded-lg focus:ring-2 focus:ring-confluence-blue focus:border-confluence-blue appearance-none bg-white/70 backdrop-blur-sm"
-                >
-                  <option value="">Choose a space...</option>
-                  {spaces.map(space => (
-                    <option key={space.key} value={space.key}>{space.name} ({space.key})</option>
-                  ))}
-                </select>
-                <ChevronDown className="absolute right-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+
+              {/* Page Selection - Aesthetic Multiselect */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Select Video Pages ({selectedPages.length} selected)
+                </label>
+                <div className="relative">
+                  <button
+                    type="button"
+                    onClick={() => setIsPageDropdownOpen(!isPageDropdownOpen)}
+                    disabled={!selectedSpace}
+                    className="w-full p-3 border border-white/30 rounded-lg focus:ring-2 focus:ring-confluence-blue focus:border-confluence-blue bg-white/70 backdrop-blur-sm text-left flex items-center justify-between disabled:bg-gray-100 disabled:cursor-not-allowed"
+                  >
+                    <span className={selectedPages.length === 0 ? 'text-gray-500' : 'text-gray-700'}>
+                      {selectedPages.length === 0 
+                        ? 'Choose pages...' 
+                        : selectedPages.length === 1 
+                          ? selectedPages[0]
+                          : `${selectedPages.length} pages selected`
+                      }
+                    </span>
+                    {isPageDropdownOpen ? (
+                      <ChevronUp className="w-5 h-5 text-gray-400" />
+                    ) : (
+                      <ChevronDown className="w-5 h-5 text-gray-400" />
+                    )}
+                  </button>
+
+                  {/* Dropdown */}
+                  {isPageDropdownOpen && selectedSpace && (
+                    <div className="absolute z-10 w-full mt-1 bg-white/95 backdrop-blur-xl border border-white/30 rounded-lg shadow-xl max-h-60 overflow-hidden">
+                      {/* Header with Select All/Clear All */}
+                      <div className="p-3 border-b border-white/20 bg-white/50">
+                        <div className="flex justify-between items-center">
+                          <button
+                            onClick={selectAllPages}
+                            className="text-sm text-confluence-blue hover:text-confluence-blue/80 font-medium"
+                          >
+                            Select All
+                          </button>
+                          <button
+                            onClick={clearAllPages}
+                            className="text-sm text-gray-500 hover:text-gray-700 font-medium"
+                          >
+                            Clear All
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Page List */}
+                      <div className="max-h-48 overflow-y-auto">
+                        {pages.length === 0 ? (
+                          <div className="p-3 text-gray-500 text-sm text-center">
+                            No pages found in this space
+                          </div>
+                        ) : (
+                          pages.map(page => (
+                            <label
+                              key={page}
+                              className="flex items-center space-x-3 p-3 hover:bg-white/50 cursor-pointer border-b border-white/10 last:border-b-0"
+                            >
+                              <div className="relative">
+                                <input
+                                  type="checkbox"
+                                  checked={selectedPages.includes(page)}
+                                  onChange={() => handlePageSelection(page)}
+                                  className="sr-only"
+                                />
+                                <div className={`w-5 h-5 border-2 rounded flex items-center justify-center transition-colors ${
+                                  selectedPages.includes(page)
+                                    ? 'bg-confluence-blue border-confluence-blue'
+                                    : 'border-gray-300 hover:border-confluence-blue/50'
+                                }`}>
+                                  {selectedPages.includes(page) && (
+                                    <Check className="w-3 h-3 text-white" />
+                                  )}
+                                </div>
+                              </div>
+                              <span className="text-sm text-gray-700 flex-1">{page}</span>
+                            </label>
+                          ))
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
-            {/* Page Selection */}
-            <div className="mb-4">
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Select Pages to Summarize
-              </label>
-              <div className="space-y-2 max-h-40 overflow-y-auto border border-white/30 rounded-lg p-2 bg-white/50 backdrop-blur-sm">
-                {pages.map(page => (
-                  <label key={page} className="flex items-center space-x-2 p-2 hover:bg-white/30 rounded cursor-pointer backdrop-blur-sm">
-                    <input
-                      type="checkbox"
-                      checked={selectedPages.includes(page)}
-                      onChange={(e) => {
-                        if (e.target.checked) {
-                          setSelectedPages([...selectedPages, page]);
-                        } else {
-                          setSelectedPages(selectedPages.filter(p => p !== page));
-                        }
-                      }}
-                      className="rounded border-gray-300 text-confluence-blue focus:ring-confluence-blue"
-                    />
-                    <span className="text-sm text-gray-700">{page}</span>
-                  </label>
-                ))}
-              </div>
-              <div className="flex items-center space-x-2 mb-2">
-                <input
-                  type="checkbox"
-                  checked={selectAllPages}
-                  onChange={toggleSelectAllPages}
-                  className="rounded border-gray-300 text-confluence-blue focus:ring-confluence-blue"
-                />
-                <span className="text-sm text-gray-700 font-medium">Select All Pages</span>
-              </div>
-              <p className="text-sm text-gray-500 mt-1">
-                {selectedPages.length} page(s) selected
-              </p>
-            </div>
+
+            <button
+              onClick={processVideos}
+              disabled={!selectedSpace || selectedPages.length === 0 || isProcessing}
+              className="mt-4 w-full bg-confluence-blue/90 backdrop-blur-sm text-white py-3 px-4 rounded-lg hover:bg-confluence-blue disabled:bg-gray-300 disabled:cursor-not-allowed flex items-center justify-center space-x-2 transition-colors border border-white/10"
+            >
+              {isProcessing ? (
+                <>
+                  <Loader2 className="w-5 h-5 animate-spin" />
+                  <span>Processing Videos...</span>
+                </>
+              ) : (
+                <>
+                  <Video className="w-5 h-5" />
+                  <span>Process {selectedPages.length} Video{selectedPages.length !== 1 ? 's' : ''}</span>
+                </>
+              )}
+            </button>
           </div>
 
           {/* Videos List */}

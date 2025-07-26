@@ -288,6 +288,8 @@ const AgentMode: React.FC<AgentModeProps> = ({ onClose, onModeSelect, autoSpaceK
     setActiveTab('final-answer');
     setProgressPercent(0);
     let reasoningLines: string[] = [];
+    let impactAnalyzerResult: React.ReactNode | null = null;
+    let testStrategyResult: React.ReactNode | null = null;
     try {
       setPlanSteps((steps) => steps.map((s) => s.id === 1 ? { ...s, status: 'running' } : s));
       setCurrentStep(0);
@@ -416,13 +418,17 @@ const AgentMode: React.FC<AgentModeProps> = ({ onClose, onModeSelect, autoSpaceK
       setCurrentStep(2);
       setProgressPercent(100);
       // Prepare output tabs for new UI
-      const pageTabs = Object.keys(pageResults).length > 0 ? [
+      const pageTabs = Object.keys(pageResults).length > 0 || impactAnalyzerResult || testStrategyResult ? [
         {
           id: 'per-page-results',
           label: 'Page Results',
           icon: FileText,
           content: '',
-          results: Object.entries(pageResults).map(([page, results]) => ({ page, results })),
+          results: [
+            ...(impactAnalyzerResult ? [{ impactAnalyzerResult }] : []),
+            ...(testStrategyResult ? [{ testStrategyResult }] : []),
+            ...Object.entries(pageResults).map(([page, results]) => ({ page, results })),
+          ],
         }
       ] : [];
       const tabs = [
@@ -868,38 +874,98 @@ ${outputTabs.find(tab => tab.id === 'used-tools')?.content || ''}
                         <div className="prose prose-sm max-w-none">
                           {activeTab === 'per-page-results' ? (
                             <div>
-                              {/* Page Buttons */}
-                              <div className="mb-6">
-                                {(outputTabs.find(t => t.id === 'per-page-results')?.results || []).map((r: { page: string, results: Array<{ instruction: string, tool: string, outputs: string[], formattedOutput: string }> }) => (
+                              {/* Special Buttons for Impact Analyzer and Test Strategy */}
+                              {outputTabs.find(t => t.id === 'per-page-results')?.results?.some((r: any) => 'impactAnalyzerResult' in r) && (
+                                <div className="mb-6 flex flex-wrap gap-2">
                                   <button
-                                    key={r.page}
-                                    onClick={() => setActiveResult(activeResult && activeResult.key === r.page ? null : { type: 'page', key: r.page })}
-                                    className={`px-4 py-2 m-1 rounded transition-colors ${
-                                      activeResult && activeResult.key === r.page 
-                                        ? 'bg-orange-500 text-white shadow-lg' 
-                                        : 'bg-gray-200 text-gray-800 hover:bg-gray-300'
+                                    onClick={() => setActiveResult(activeResult && activeResult.key === 'impact-analyzer' ? null : { type: 'impact-analyzer', key: 'impact-analyzer' })}
+                                    className={`px-5 py-2 rounded-lg font-semibold shadow transition-colors border border-orange-200/50 focus:outline-none focus:ring-2 focus:ring-orange-400/60 focus:ring-offset-2 ${
+                                      activeResult && activeResult.key === 'impact-analyzer' 
+                                        ? 'bg-gradient-to-r from-orange-500 to-orange-600 text-white scale-105' 
+                                        : 'bg-white/80 text-orange-700 hover:bg-orange-100'
                                     }`}
+                                    style={{ minWidth: 180 }}
                                   >
-                                    {r.page}
+                                    Impact Analyzer
                                   </button>
-                                ))}
-                              </div>
-                              
+                                </div>
+                              )}
+                              {outputTabs.find(t => t.id === 'per-page-results')?.results?.some((r: any) => 'testStrategyResult' in r) && (
+                                <div className="mb-6 flex flex-wrap gap-2">
+                                  <button
+                                    onClick={() => setActiveResult(activeResult && activeResult.key === 'test-strategy' ? null : { type: 'test-strategy', key: 'test-strategy' })}
+                                    className={`px-5 py-2 rounded-lg font-semibold shadow transition-colors border border-orange-200/50 focus:outline-none focus:ring-2 focus:ring-orange-400/60 focus:ring-offset-2 ${
+                                      activeResult && activeResult.key === 'test-strategy' 
+                                        ? 'bg-gradient-to-r from-orange-500 to-orange-600 text-white scale-105' 
+                                        : 'bg-white/80 text-orange-700 hover:bg-orange-100'
+                                    }`}
+                                    style={{ minWidth: 180 }}
+                                  >
+                                    Test Strategy
+                                  </button>
+                                </div>
+                              )}
+                              {/* Page Buttons (hide if special button is active) */}
+                              {!activeResult || (activeResult.type !== 'impact-analyzer' && activeResult.type !== 'test-strategy') ? (
+                                <div className="mb-6 flex flex-wrap gap-2">
+                                  {(outputTabs.find(t => t.id === 'per-page-results')?.results || []).map((r: any) => (
+                                    (!('impactAnalyzerResult' in r) && !('testStrategyResult' in r)) && (
+                                      <button
+                                        key={r.page}
+                                        onClick={() => setActiveResult(activeResult && activeResult.key === r.page ? null : { type: 'page', key: r.page })}
+                                        className={`px-5 py-2 rounded-lg font-semibold shadow transition-colors border border-orange-200/50 focus:outline-none focus:ring-2 focus:ring-orange-400/60 focus:ring-offset-2 ${
+                                          activeResult && activeResult.key === r.page 
+                                            ? 'bg-gradient-to-r from-orange-500 to-orange-600 text-white scale-105' 
+                                            : 'bg-white/80 text-orange-700 hover:bg-orange-100'
+                                        }`}
+                                        style={{ minWidth: 120 }}
+                                      >
+                                        {r.page}
+                                      </button>
+                                    )
+                                  ))}
+                                </div>
+                              ) : null}
+                              {/* Impact Analyzer Result */}
+                              {activeResult && activeResult.type === 'impact-analyzer' && (
+                                <div className="mt-4">
+                                  {(() => {
+                                    const impactData = (outputTabs.find(t => t.id === 'per-page-results')?.results || []).find((r: any) => 'impactAnalyzerResult' in r);
+                                    if (!impactData || !('impactAnalyzerResult' in impactData)) return null;
+                                    return impactData.impactAnalyzerResult;
+                                  })()}
+                                </div>
+                              )}
+                              {/* Test Strategy Result */}
+                              {activeResult && activeResult.type === 'test-strategy' && (
+                                <div className="mt-4">
+                                  {(() => {
+                                    const testStrategyData = (outputTabs.find(t => t.id === 'per-page-results')?.results || []).find((r: any) => 'testStrategyResult' in r);
+                                    if (!testStrategyData || !('testStrategyResult' in testStrategyData)) return null;
+                                    return testStrategyData.testStrategyResult;
+                                  })()}
+                                </div>
+                              )}
                               {/* Page Results */}
                               {activeResult && activeResult.type === 'page' && (
                                 <div className="mt-4">
                                   {(() => {
                                     const pageData = (outputTabs.find(t => t.id === 'per-page-results')?.results || []).find((r: { page: string, results: Array<{ instruction: string, tool: string, outputs: string[], formattedOutput: string }> }) => r.page === activeResult.key);
                                     if (!pageData) return null;
-                                    
                                     return (
-                                      <div>
-                                        <h3 className="text-xl font-bold text-gray-800 mb-4">{pageData.page}</h3>
+                                      <div className="rounded-2xl shadow-xl border border-orange-200/60 bg-white/90 p-6 max-w-3xl mx-auto animate-fade-in">
+                                        <h3 className="text-2xl font-extrabold text-orange-700 mb-6 flex items-center gap-2">
+                                          <FileText className="w-6 h-6 text-orange-400" />
+                                          {pageData.page}
+                                        </h3>
                                         {(pageData.results || []).map((result: { instruction: string, tool: string, outputs: string[], formattedOutput: string }, index: number) => (
-                                          <div key={index} className="bg-white/80 backdrop-blur-sm rounded-lg p-4 border border-white/20 mb-4">
-                                            <h4 className="text-lg font-semibold text-gray-800 mb-2">Instruction {index + 1}: "{result.instruction}"</h4>
-                                            <p className="text-sm text-gray-700 mb-2">Tool: {result.tool}</p>
-                                            <div className="whitespace-pre-wrap text-gray-700 border rounded p-4 bg-white/80">
+                                          <div key={index} className="mb-8 last:mb-0">
+                                            <div className="flex items-center gap-2 mb-2">
+                                              <span className="inline-block px-3 py-1 rounded-full bg-orange-100 text-orange-700 text-xs font-bold uppercase tracking-wide shadow-sm border border-orange-200/60">Instruction {index + 1}</span>
+                                              <span className="text-gray-500 text-xs">{result.tool.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}</span>
+                                            </div>
+                                            <div className="text-base font-semibold text-gray-800 mb-2">"{result.instruction}"</div>
+                                            <div className="whitespace-pre-wrap text-gray-700 border border-orange-100 rounded-xl p-4 bg-orange-50/60 shadow-inner overflow-x-auto">
                                               {result.formattedOutput}
                                             </div>
                                           </div>

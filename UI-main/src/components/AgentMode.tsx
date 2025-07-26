@@ -514,6 +514,12 @@ const AgentMode: React.FC<AgentModeProps> = ({ onClose, onModeSelect, autoSpaceK
         ...(testStrategyTab ? [testStrategyTab] : []),
         ...pageTabs,
         {
+          id: 'final-answer',
+          label: 'Final Answer',
+          icon: FileText,
+          content: generateFinalAnswerContent(impactResults, testStrategyResults, pageResults),
+        },
+        {
           id: 'reasoning',
           label: 'Reasoning',
           icon: Brain,
@@ -527,7 +533,7 @@ const AgentMode: React.FC<AgentModeProps> = ({ onClose, onModeSelect, autoSpaceK
         },
       ];
       setOutputTabs(tabs);
-      setActiveTab(impactTab ? 'impact-analysed' : testStrategyTab ? 'test-strategy' : (pageTabs.length > 0 ? 'per-page-results' : 'reasoning'));
+      setActiveTab('final-answer');
       setActiveResult(null);
     } catch (err: any) {
       setError(err.message || 'An error occurred during orchestration.');
@@ -630,6 +636,40 @@ I've analyzed the relevant Confluence content and identified key areas for impro
 - Ask follow-up questions for clarification or refinement
 
 *Analysis completed at ${new Date().toLocaleString()}*`;
+  };
+
+  const generateFinalAnswerContent = (impactResults: any[], testStrategyResults: any[], pageResults: Record<string, any>) => {
+    let content = '';
+    
+    if (impactResults.length > 0) {
+      content += '### Impact Analysis Results\n';
+      impactResults.forEach(result => {
+        content += `**${result.page}**: ${result.result}\n\n`;
+      });
+    }
+    
+    if (testStrategyResults.length > 0) {
+      content += '### Test Strategy Results\n';
+      testStrategyResults.forEach(result => {
+        content += `${result.strategy}\n\n`;
+      });
+    }
+    
+    if (Object.keys(pageResults).length > 0) {
+      content += '### Page Analysis Results\n';
+      Object.entries(pageResults).forEach(([page, { tool, outputs }]) => {
+        content += `**${page}** (${tool}):\n`;
+        outputs.forEach((output: string, index: number) => {
+          content += `${output}\n\n`;
+        });
+      });
+    }
+    
+    if (!content) {
+      content = 'No specific results were generated for this instruction. Please check the reasoning tab for more details.';
+    }
+    
+    return content;
   };
 
   const generateReasoningSteps = () => {

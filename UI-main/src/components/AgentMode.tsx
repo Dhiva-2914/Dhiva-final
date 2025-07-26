@@ -319,178 +319,238 @@ const AgentMode: React.FC<AgentModeProps> = ({ onClose, onModeSelect, autoSpaceK
       // Map each instruction to the correct page/tool based on content type and intent
       const pageResults: Record<string, Array<{ instruction: string, tool: string, outputs: string[], formattedOutput: string }>> = {};
       
-      // Determine the primary tool based on the overall goal and content types
-      const hasVideoPages = selectedPages.some(page => (pageTypes.find(p => p.title === page)?.content_type) === 'video');
-      const hasImagePages = selectedPages.some(page => (pageTypes.find(p => p.title === page)?.content_type) === 'image');
-      const hasCodePages = selectedPages.some(page => (pageTypes.find(p => p.title === page)?.content_type) === 'code');
+      // Analyze instructions to determine required tools
+      const requiredTools = new Set<string>();
+      const instructionTools: { instruction: string, tools: string[] }[] = [];
       
-      // Determine primary tool based on goal and content types
-      let primaryTool = 'ai_powered_search';
-      if (/video|summarize.*video|transcribe|video.*summarize/.test(goal.toLowerCase()) && hasVideoPages) {
-        primaryTool = 'video_summarizer';
-      } else if (/image|chart|diagram|visual|image.*summarize|summarize.*image/.test(goal.toLowerCase()) && hasImagePages) {
-        primaryTool = 'image_insights';
-      } else if (/convert|debug|refactor|fix|bug|error|optimize|performance|documentation|docs|comment|dead code|unused|logging|log/.test(goal.toLowerCase()) && hasCodePages) {
-        primaryTool = 'code_assistant';
-      } else if (/impact|change|difference|diff/.test(goal.toLowerCase())) {
-        primaryTool = 'impact_analyzer';
-      } else if (/test|qa|test case|unit test/.test(goal.toLowerCase())) {
-        primaryTool = 'test_support';
+      for (const instruction of instructions) {
+        const lowerInstruction = instruction.toLowerCase();
+        const tools: string[] = [];
+        
+        // Detect video-related instructions
+        if (/video|summarize.*video|transcribe|video.*summarize/.test(lowerInstruction)) {
+          tools.push('video_summarizer');
+        }
+        
+        // Detect image-related instructions
+        if (/image|chart|diagram|visual|image.*summarize|summarize.*image/.test(lowerInstruction)) {
+          tools.push('image_insights');
+        }
+        
+        // Detect code-related instructions
+        if (/convert|debug|refactor|fix|bug|error|optimize|performance|documentation|docs|comment|dead code|unused|logging|log|code/.test(lowerInstruction)) {
+          tools.push('code_assistant');
+        }
+        
+        // Detect text-related instructions
+        if (/text|summarize.*text|text.*summarize/.test(lowerInstruction)) {
+          tools.push('ai_powered_search');
+        }
+        
+        // Detect special tools
+        if (/impact|change|difference|diff/.test(lowerInstruction)) {
+          tools.push('impact_analyzer');
+        }
+        if (/test|qa|test case|unit test/.test(lowerInstruction)) {
+          tools.push('test_support');
+        }
+        
+        // If no specific tool detected, default to AI Powered Search
+        if (tools.length === 0) {
+          tools.push('ai_powered_search');
+        }
+        
+        tools.forEach(tool => requiredTools.add(tool));
+        instructionTools.push({ instruction, tools });
       }
       
+      // Get content types for each page
+      const pageContentTypes = new Map<string, string>();
       for (const page of selectedPages) {
         const type = (pageTypes.find(p => p.title === page)?.content_type) || 'text';
-        for (let i = 0; i < instructions.length; i++) {
-          const instruction = instructions[i];
-          // Use the primary tool determined above, but allow specific overrides
-          let tool = primaryTool;
+        pageContentTypes.set(page, type);
+      }
+      
+      // Match instructions to pages based on content type and required tools
+      const pageInstructions: { page: string, instruction: string, tool: string }[] = [];
+      
+      for (const page of selectedPages) {
+        const pageType = pageContentTypes.get(page) || 'text';
+        
+        // Find the best matching instruction for this page
+        let bestMatch = { instruction: instructions[0], tool: 'ai_powered_search' };
+        
+        for (const { instruction, tools } of instructionTools) {
+          const lowerInstruction = instruction.toLowerCase();
           
-          // Override for specific content types
-          if (type === 'video' && primaryTool !== 'impact_analyzer' && primaryTool !== 'test_support') {
-            tool = 'video_summarizer';
-          } else if (type === 'image' && primaryTool !== 'impact_analyzer' && primaryTool !== 'test_support') {
-            tool = 'image_insights';
-          } else if (type === 'code' && primaryTool !== 'impact_analyzer' && primaryTool !== 'test_support') {
-            tool = 'code_assistant';
+          // Match based on content type
+          if (pageType === 'video' && tools.includes('video_summarizer')) {
+            bestMatch = { instruction, tool: 'video_summarizer' };
+            break;
+          } else if (pageType === 'image' && tools.includes('image_insights')) {
+            bestMatch = { instruction, tool: 'image_insights' };
+            break;
+          } else if (pageType === 'code' && tools.includes('code_assistant')) {
+            bestMatch = { instruction, tool: 'code_assistant' };
+            break;
+          } else if (pageType === 'text' && tools.includes('ai_powered_search')) {
+            bestMatch = { instruction, tool: 'ai_powered_search' };
+            break;
           }
-          let outputs: string[] = [];
-          let formattedOutput = '';
-          
-          if (tool === 'code_assistant') {
-            // Handle AI actions for code pages
-            const relatedActions = splitRelatedActions(instruction);
-            let lastOutput = '';
-            let aiActionOutput = '';
-            let conversionOutput = '';
-            let modificationOutput = '';
-            // Get the original code first to use in prompts (like Tool Mode does)
-            const initialResult = await apiService.codeAssistant({
+        }
+        
+        // If no specific match found, use the first available tool
+        if (bestMatch.tool === 'ai_powered_search') {
+          for (const { instruction, tools } of instructionTools) {
+            if (tools.length > 0) {
+              bestMatch = { instruction, tool: tools[0] };
+              break;
+            }
+          }
+        }
+        
+        pageInstructions.push({ page, instruction: bestMatch.instruction, tool: bestMatch.tool });
+      }
+      
+      for (const { page, instruction, tool } of pageInstructions) {
+        const type = pageContentTypes.get(page) || 'text';
+        let outputs: string[] = [];
+        let formattedOutput = '';
+        
+        if (tool === 'code_assistant') {
+          // Handle AI actions for code pages
+          const relatedActions = splitRelatedActions(instruction);
+          let lastOutput = '';
+          let aiActionOutput = '';
+          let conversionOutput = '';
+          let modificationOutput = '';
+          // Get the original code first to use in prompts (like Tool Mode does)
+          const initialResult = await apiService.codeAssistant({
+            space_key: selectedSpace,
+            page_title: page,
+            instruction: ''
+          });
+          const detectedCode = initialResult.original_code || '';
+          const actionPromptMap: Record<string, string> = {
+            "Summarize Code": `Summarize the following code in clear and concise language:\n\n${detectedCode}`,
+            "Optimize Performance": `Optimize the following code for performance without changing its functionality, return only the updated code:\n\n${detectedCode}`,
+            "Generate Documentation": `Generate inline documentation and function-level comments for the following code, return only the updated code by commenting the each line of the code.:\n\n${detectedCode}`,
+            "Refactor Structure": `Refactor the following code to improve structure, readability, and modularity, return only the updated code:\n\n${detectedCode}`,
+            "Identify dead code": `Analyze the following code for any unsued code or dead code, return only the updated code by removing the dead code:\n\n${detectedCode}`,
+            "Add Logging Statements": `Add appropriate logging statements to the following code for better traceability and debugging. Return only the updated code:\n\n${detectedCode}`,
+          };
+          for (const action of relatedActions) {
+            let prompt = action;
+            if (/optimize|performance/i.test(action)) {
+              prompt = actionPromptMap["Optimize Performance"];
+            } else if (/documentation|docs|comment/i.test(action)) {
+              prompt = actionPromptMap["Generate Documentation"];
+            } else if (/refactor|structure/i.test(action)) {
+              prompt = actionPromptMap["Refactor Structure"];
+            } else if (/dead code|unused/i.test(action)) {
+              prompt = actionPromptMap["Identify dead code"];
+            } else if (/logging|log/i.test(action)) {
+              prompt = actionPromptMap["Add Logging Statements"];
+            } else if (/summarize|summary/i.test(action)) {
+              prompt = actionPromptMap["Summarize Code"];
+            }
+            const result = await apiService.codeAssistant({
               space_key: selectedSpace,
               page_title: page,
-              instruction: ''
+              instruction: prompt
             });
-            const detectedCode = initialResult.original_code || '';
-            const actionPromptMap: Record<string, string> = {
-              "Summarize Code": `Summarize the following code in clear and concise language:\n\n${detectedCode}`,
-              "Optimize Performance": `Optimize the following code for performance without changing its functionality, return only the updated code:\n\n${detectedCode}`,
-              "Generate Documentation": `Generate inline documentation and function-level comments for the following code, return only the updated code by commenting the each line of the code.:\n\n${detectedCode}`,
-              "Refactor Structure": `Refactor the following code to improve structure, readability, and modularity, return only the updated code:\n\n${detectedCode}`,
-              "Identify dead code": `Analyze the following code for any unsued code or dead code, return only the updated code by removing the dead code:\n\n${detectedCode}`,
-              "Add Logging Statements": `Add appropriate logging statements to the following code for better traceability and debugging. Return only the updated code:\n\n${detectedCode}`,
-            };
-            for (const action of relatedActions) {
-              let prompt = action;
-              if (/optimize|performance/i.test(action)) {
-                prompt = actionPromptMap["Optimize Performance"];
-              } else if (/documentation|docs|comment/i.test(action)) {
-                prompt = actionPromptMap["Generate Documentation"];
-              } else if (/refactor|structure/i.test(action)) {
-                prompt = actionPromptMap["Refactor Structure"];
-              } else if (/dead code|unused/i.test(action)) {
-                prompt = actionPromptMap["Identify dead code"];
-              } else if (/logging|log/i.test(action)) {
-                prompt = actionPromptMap["Add Logging Statements"];
-              } else if (/summarize|summary/i.test(action)) {
-                prompt = actionPromptMap["Summarize Code"];
-              }
-              const result = await apiService.codeAssistant({
-                space_key: selectedSpace,
-                page_title: page,
-                instruction: prompt
-              });
-              const output = result.modified_code || result.converted_code || result.original_code || 'AI action completed successfully.';
-              if (/optimize|refactor|dead code|docs|logging|summarize/i.test(action)) {
-                aiActionOutput = output;
-              } else if (/convert|language|to\s+\w+/i.test(action)) {
-                conversionOutput = output;
-              } else {
-                modificationOutput = output;
-              }
-              lastOutput = output;
-            }
-            if (aiActionOutput) outputs.push(`AI Action Output:\n${aiActionOutput}`);
-            if (conversionOutput) outputs.push(`Target Language Conversion Output:\n${conversionOutput}`);
-            if (modificationOutput) outputs.push(`Modification Output:\n${modificationOutput}`);
-            if (!aiActionOutput && !conversionOutput && !modificationOutput && lastOutput) {
-              outputs.push(`Processed Code:\n${lastOutput}`);
-            }
-            formattedOutput = formatCodeAssistantOutput(outputs);
-            toolsTriggered.push('Code Assistant');
-            whyUsed.push(`Code Assistant was used to ${instruction.toLowerCase()} for the code page "${page}".`);
-            howDerived.push(`The code was processed using AI-powered analysis and transformation techniques.`);
-          } else if (tool === 'image_insights') {
-            // Image summarization using ImageInsights tool (no web search)
-            const images = await apiService.getImages(selectedSpace, page);
-            let output = '';
-            if (images && images.images && images.images.length > 0) {
-              const summaries = await Promise.all(images.images.map((imgUrl: string) => apiService.imageSummary({ space_key: selectedSpace, page_title: page, image_url: imgUrl })));
-              output = summaries.map((s, i) => `Image ${i + 1}: ${s.summary}`).join('\n\n');
+            const output = result.modified_code || result.converted_code || result.original_code || 'AI action completed successfully.';
+            if (/optimize|refactor|dead code|docs|logging|summarize/i.test(action)) {
+              aiActionOutput = output;
+            } else if (/convert|language|to\s+\w+/i.test(action)) {
+              conversionOutput = output;
             } else {
-              output = 'No images found on this page.';
+              modificationOutput = output;
             }
-            outputs.push(output);
-            formattedOutput = formatImageInsightsOutput([{ name: page, summary: output }]);
-            toolsTriggered.push('Image Insights');
-            whyUsed.push(`Image Insights was used to analyze and summarize the images on page "${page}".`);
-            howDerived.push(`The images were processed using computer vision and AI analysis to extract meaningful insights and descriptions.`);
-          } else if (tool === 'ai_powered_search') {
-            // Only use AI Powered Search for text/code content, NOT for video/image
-            const res = await apiService.search({ space_key: selectedSpace, page_titles: [page], query: instruction });
-            outputs.push(res.response);
-            formattedOutput = formatAIPoweredSearchOutput(res.response);
-            toolsTriggered.push('AI Powered Search');
-            whyUsed.push(`AI Powered Search was used to analyze and summarize the content on page "${page}".`);
-            howDerived.push(`The content was processed using natural language processing to extract key information and provide comprehensive summaries.`);
-          } else if (tool === 'video_summarizer') {
-            // Video summarization using exact same logic as Tool Mode
-            const res = await apiService.videoSummarizer({ space_key: selectedSpace, page_title: page });
-            
-            // Create video content object similar to Tool Mode
-            const videoContent = {
-              id: Date.now().toString(),
-              name: page,
-              summary: res.summary,
-              quotes: res.quotes,
-              timestamps: res.timestamps,
-              qa: res.qa
-            };
-            
-            // Format output using the same structure as Tool Mode
-            let summaryText = videoContent.summary || 'No summary available.';
-            let quotesText = videoContent.quotes && videoContent.quotes.length > 0 
-              ? `\n\nKey Quotes:\n${videoContent.quotes.map(quote => `- "${quote}"`).join('\n')}`
-              : '';
-            let timestampsText = videoContent.timestamps && videoContent.timestamps.length > 0
-              ? `\n\nTimestamps:\n${videoContent.timestamps.map(ts => `- ${ts}`).join('\n')}`
-              : '';
-            
-            const fullOutput = `${summaryText}${quotesText}${timestampsText}`;
-            outputs.push(fullOutput);
-            
-            // Use the existing formatter function to maintain consistency
-            formattedOutput = formatVideoSummarizerOutput({
-              name: videoContent.name,
-              summary: videoContent.summary,
-              timestamps: videoContent.timestamps || [],
-              quotes: videoContent.quotes || []
-            });
-            
-            toolsTriggered.push('Video Summarizer');
-            whyUsed.push(`Video Summarizer was used to analyze and summarize the video content on page "${page}".`);
-            howDerived.push(`The video was processed using AI-powered analysis to extract key moments, timestamps, and comprehensive summaries.`);
-          } else {
-            // Fallback: use AI Powered Search for any other type (never web search)
-            const res = await apiService.search({ space_key: selectedSpace, page_titles: [page], query: instruction });
-            outputs.push(res.response);
-            formattedOutput = formatAIPoweredSearchOutput(res.response);
-            toolsTriggered.push('AI Powered Search');
-            whyUsed.push(`AI Powered Search was used as a fallback to analyze the content on page "${page}".`);
-            howDerived.push(`The content was processed using general AI analysis to provide relevant information.`);
+            lastOutput = output;
           }
-          if (!pageResults[page]) pageResults[page] = [];
-          // Only push the result for this page/instruction pair
-          pageResults[page].push({ instruction, tool, outputs, formattedOutput });
+          if (aiActionOutput) outputs.push(`AI Action Output:\n${aiActionOutput}`);
+          if (conversionOutput) outputs.push(`Target Language Conversion Output:\n${conversionOutput}`);
+          if (modificationOutput) outputs.push(`Modification Output:\n${modificationOutput}`);
+          if (!aiActionOutput && !conversionOutput && !modificationOutput && lastOutput) {
+            outputs.push(`Processed Code:\n${lastOutput}`);
+          }
+          formattedOutput = formatCodeAssistantOutput(outputs);
+          toolsTriggered.push('Code Assistant');
+          whyUsed.push(`Code Assistant was used to ${instruction.toLowerCase()} for the code page "${page}".`);
+          howDerived.push(`The code was processed using AI-powered analysis and transformation techniques.`);
+        } else if (tool === 'image_insights') {
+          // Image summarization using ImageInsights tool (no web search)
+          const images = await apiService.getImages(selectedSpace, page);
+          let output = '';
+          if (images && images.images && images.images.length > 0) {
+            const summaries = await Promise.all(images.images.map((imgUrl: string) => apiService.imageSummary({ space_key: selectedSpace, page_title: page, image_url: imgUrl })));
+            output = summaries.map((s, i) => `Image ${i + 1}: ${s.summary}`).join('\n\n');
+          } else {
+            output = 'No images found on this page.';
+          }
+          outputs.push(output);
+          formattedOutput = formatImageInsightsOutput([{ name: page, summary: output }]);
+          toolsTriggered.push('Image Insights');
+          whyUsed.push(`Image Insights was used to analyze and summarize the images on page "${page}".`);
+          howDerived.push(`The images were processed using computer vision and AI analysis to extract meaningful insights and descriptions.`);
+        } else if (tool === 'ai_powered_search') {
+          // Only use AI Powered Search for text/code content, NOT for video/image
+          const res = await apiService.search({ space_key: selectedSpace, page_titles: [page], query: instruction });
+          outputs.push(res.response);
+          formattedOutput = formatAIPoweredSearchOutput(res.response);
+          toolsTriggered.push('AI Powered Search');
+          whyUsed.push(`AI Powered Search was used to analyze and summarize the content on page "${page}".`);
+          howDerived.push(`The content was processed using natural language processing to extract key information and provide comprehensive summaries.`);
+        } else if (tool === 'video_summarizer') {
+          // Video summarization using exact same logic as Tool Mode
+          const res = await apiService.videoSummarizer({ space_key: selectedSpace, page_title: page });
+          
+          // Create video content object similar to Tool Mode
+          const videoContent = {
+            id: Date.now().toString(),
+            name: page,
+            summary: res.summary,
+            quotes: res.quotes,
+            timestamps: res.timestamps,
+            qa: res.qa
+          };
+          
+          // Format output using the same structure as Tool Mode
+          let summaryText = videoContent.summary || 'No summary available.';
+          let quotesText = videoContent.quotes && videoContent.quotes.length > 0 
+            ? `\n\nKey Quotes:\n${videoContent.quotes.map(quote => `- "${quote}"`).join('\n')}`
+            : '';
+          let timestampsText = videoContent.timestamps && videoContent.timestamps.length > 0
+            ? `\n\nTimestamps:\n${videoContent.timestamps.map(ts => `- ${ts}`).join('\n')}`
+            : '';
+          
+          const fullOutput = `${summaryText}${quotesText}${timestampsText}`;
+          outputs.push(fullOutput);
+          
+          // Use the existing formatter function to maintain consistency
+          formattedOutput = formatVideoSummarizerOutput({
+            name: videoContent.name,
+            summary: videoContent.summary,
+            timestamps: videoContent.timestamps || [],
+            quotes: videoContent.quotes || []
+          });
+          
+          toolsTriggered.push('Video Summarizer');
+          whyUsed.push(`Video Summarizer was used to analyze and summarize the video content on page "${page}".`);
+          howDerived.push(`The video was processed using AI-powered analysis to extract key moments, timestamps, and comprehensive summaries.`);
+        } else {
+          // Fallback: use AI Powered Search for any other type (never web search)
+          const res = await apiService.search({ space_key: selectedSpace, page_titles: [page], query: instruction });
+          outputs.push(res.response);
+          formattedOutput = formatAIPoweredSearchOutput(res.response);
+          toolsTriggered.push('AI Powered Search');
+          whyUsed.push(`AI Powered Search was used as a fallback to analyze the content on page "${page}".`);
+          howDerived.push(`The content was processed using general AI analysis to provide relevant information.`);
         }
+        if (!pageResults[page]) pageResults[page] = [];
+        // Only push the result for this page/instruction pair
+        pageResults[page].push({ instruction, tool, outputs, formattedOutput });
       }
       
       // Handle special cases for Impact Analyzer and Test Strategy

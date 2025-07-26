@@ -196,7 +196,7 @@ const AgentMode: React.FC<AgentModeProps> = ({ onClose, onModeSelect, autoSpaceK
 
   // Add progressPercent state for live progress bar
   const [progressPercent, setProgressPercent] = useState(0);
-  const [activeResult, setActiveResult] = useState<{ type: string, key: string } | null>(null);
+  const [activeResult, setActiveResult] = useState<{ type: string, key: string, page?: string, instructionIndex?: number } | null>(null);
 
   // History state variables
   const [history, setHistory] = useState<HistoryEntry[]>([]);
@@ -1315,18 +1315,20 @@ ${isHistoryExport ? `*Historical Entry ID: ${currentHistoryId}*` : ''}`;
                                 <div className="mb-6 flex flex-wrap gap-2">
                                   {(outputTabs.find(t => t.id === 'per-page-results')?.results || []).map((r: any) => (
                                     (!('impactAnalyzerResult' in r) && !('testStrategyResult' in r)) && (
-                                      <button
-                                        key={r.page}
-                                        onClick={() => setActiveResult(activeResult && activeResult.key === r.page ? null : { type: 'page', key: r.page })}
-                                        className={`px-5 py-2 rounded-lg font-semibold shadow transition-colors border border-orange-200/50 focus:outline-none focus:ring-2 focus:ring-orange-400/60 focus:ring-offset-2 ${
-                                          activeResult && activeResult.key === r.page 
-                                            ? 'bg-gradient-to-r from-orange-500 to-orange-600 text-white scale-105' 
-                                            : 'bg-white/80 text-orange-700 hover:bg-orange-100'
-                                        }`}
-                                        style={{ minWidth: 120 }}
-                                      >
-                                        {r.page}
-                                      </button>
+                                      (r.results || []).map((result: { instruction: string, tool: string, outputs: string[], formattedOutput: string }, index: number) => (
+                                        <button
+                                          key={`${r.page}-instruction-${index}`}
+                                          onClick={() => setActiveResult(activeResult && activeResult.key === `${r.page}-instruction-${index}` ? null : { type: 'page', key: `${r.page}-instruction-${index}`, page: r.page, instructionIndex: index })}
+                                          className={`px-5 py-2 rounded-lg font-semibold shadow transition-colors border border-orange-200/50 focus:outline-none focus:ring-2 focus:ring-orange-400/60 focus:ring-offset-2 ${
+                                            activeResult && activeResult.key === `${r.page}-instruction-${index}` 
+                                              ? 'bg-gradient-to-r from-orange-500 to-orange-600 text-white scale-105' 
+                                              : 'bg-white/80 text-orange-700 hover:bg-orange-100'
+                                          }`}
+                                          style={{ minWidth: 120 }}
+                                        >
+                                          {r.page} - {result.instruction.substring(0, 30)}...
+                                        </button>
+                                      ))
                                     )
                                   ))}
                                 </div>
@@ -1355,41 +1357,43 @@ ${isHistoryExport ? `*Historical Entry ID: ${currentHistoryId}*` : ''}`;
                               {activeResult && activeResult.type === 'page' && (
                                 <div className="mt-4">
                                   {(() => {
-                                    const pageData = (outputTabs.find(t => t.id === 'per-page-results')?.results || []).find((r: { page: string, results: Array<{ instruction: string, tool: string, outputs: string[], formattedOutput: string }> }) => r.page === activeResult.key);
-                                    if (!pageData) return null;
+                                    const pageData = (outputTabs.find(t => t.id === 'per-page-results')?.results || []).find((r: { page: string, results: Array<{ instruction: string, tool: string, outputs: string[], formattedOutput: string }> }) => r.page === activeResult.page);
+                                    if (!pageData || activeResult.instructionIndex === undefined) return null;
+                                    
+                                    const result = pageData.results[activeResult.instructionIndex];
+                                    if (!result) return null;
+                                    
                                     return (
                                       <div className="rounded-2xl shadow-xl border border-orange-200/60 bg-white/90 p-6 max-w-4xl mx-auto">
                                         <h3 className="text-2xl font-extrabold text-orange-700 mb-6 flex items-center gap-2">
                                           <FileText className="w-6 h-6 text-orange-400" />
                                           {pageData.page}
                                         </h3>
-                                        {(pageData.results || []).map((result: { instruction: string, tool: string, outputs: string[], formattedOutput: string }, index: number) => (
-                                          <div key={index} className="mb-8 last:mb-0">
-                                            <div className="flex items-center gap-3 mb-4">
-                                              <span className="inline-block px-4 py-2 rounded-full bg-orange-100 text-orange-700 text-sm font-bold uppercase tracking-wide shadow-sm border border-orange-200/60">
-                                                Instruction {index + 1}
+                                        <div className="mb-8 last:mb-0">
+                                          <div className="flex items-center gap-3 mb-4">
+                                            <span className="inline-block px-4 py-2 rounded-full bg-orange-100 text-orange-700 text-sm font-bold uppercase tracking-wide shadow-sm border border-orange-200/60">
+                                              Instruction {activeResult.instructionIndex + 1}
+                                            </span>
+                                                                                          <span className="text-sm text-gray-600 bg-gray-100 px-3 py-1 rounded-full">
+                                                {result.tool.replace(/_/g, ' ').replace(/\b\w/g, (l: string) => l.toUpperCase())}
                                               </span>
-                                              <span className="text-sm text-gray-600 bg-gray-100 px-3 py-1 rounded-full">
-                                                {result.tool.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}
-                                              </span>
+                                          </div>
+                                          <div className="bg-orange-50/80 backdrop-blur-sm rounded-xl p-4 border border-orange-200/40 mb-4">
+                                            <h4 className="text-lg font-semibold text-gray-800 mb-2 flex items-center gap-2">
+                                              <span className="text-orange-600">📝</span>
+                                              "{result.instruction}"
+                                            </h4>
+                                          </div>
+                                          <div className="bg-white/90 backdrop-blur-sm rounded-xl p-6 border border-orange-100/60 shadow-inner">
+                                            <div className="flex items-center gap-2 mb-4">
+                                              <span className="text-orange-600 font-semibold">📊</span>
+                                              <span className="text-lg font-semibold text-gray-800">Result</span>
                                             </div>
-                                            <div className="bg-orange-50/80 backdrop-blur-sm rounded-xl p-4 border border-orange-200/40 mb-4">
-                                              <h4 className="text-lg font-semibold text-gray-800 mb-2 flex items-center gap-2">
-                                                <span className="text-orange-600">📝</span>
-                                                "{result.instruction}"
-                                              </h4>
-                                            </div>
-                                            <div className="bg-white/90 backdrop-blur-sm rounded-xl p-6 border border-orange-100/60 shadow-inner">
-                                              <div className="flex items-center gap-2 mb-4">
-                                                <span className="text-orange-600 font-semibold">📊</span>
-                                                <span className="text-lg font-semibold text-gray-800">Result</span>
-                                              </div>
-                                              <div className="whitespace-pre-wrap text-gray-700 leading-relaxed">
-                                                {result.formattedOutput}
-                                              </div>
+                                            <div className="whitespace-pre-wrap text-gray-700 leading-relaxed">
+                                              {result.formattedOutput}
                                             </div>
                                           </div>
-                                        ))}
+                                        </div>
                                       </div>
                                     );
                                   })()}

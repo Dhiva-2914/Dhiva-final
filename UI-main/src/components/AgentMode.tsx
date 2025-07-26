@@ -319,15 +319,44 @@ const AgentMode: React.FC<AgentModeProps> = ({ onClose, onModeSelect, autoSpaceK
       // Map each instruction to the correct page/tool based on content type and intent
       const pageResults: Record<string, Array<{ instruction: string, tool: string, outputs: string[], formattedOutput: string }>> = {};
       
+      // Determine the primary tool based on the overall goal and content types
+      const hasVideoPages = selectedPages.some(page => (pageTypes.find(p => p.title === page)?.content_type) === 'video');
+      const hasImagePages = selectedPages.some(page => (pageTypes.find(p => p.title === page)?.content_type) === 'image');
+      const hasCodePages = selectedPages.some(page => (pageTypes.find(p => p.title === page)?.content_type) === 'code');
+      
+      // Determine primary tool based on goal and content types
+      let primaryTool = 'ai_powered_search';
+      if (/video|summarize.*video|transcribe|video.*summarize/.test(goal.toLowerCase()) && hasVideoPages) {
+        primaryTool = 'video_summarizer';
+      } else if (/image|chart|diagram|visual|image.*summarize|summarize.*image/.test(goal.toLowerCase()) && hasImagePages) {
+        primaryTool = 'image_insights';
+      } else if (/convert|debug|refactor|fix|bug|error|optimize|performance|documentation|docs|comment|dead code|unused|logging|log/.test(goal.toLowerCase()) && hasCodePages) {
+        primaryTool = 'code_assistant';
+      } else if (/impact|change|difference|diff/.test(goal.toLowerCase())) {
+        primaryTool = 'impact_analyzer';
+      } else if (/test|qa|test case|unit test/.test(goal.toLowerCase())) {
+        primaryTool = 'test_support';
+      }
+      
       for (const page of selectedPages) {
         const type = (pageTypes.find(p => p.title === page)?.content_type) || 'text';
         for (let i = 0; i < instructions.length; i++) {
           const instruction = instructions[i];
-          const tool = await determineToolByIntentAndContent(instruction, selectedSpace, page);
+          // Use the primary tool determined above, but allow specific overrides
+          let tool = primaryTool;
+          
+          // Override for specific content types
+          if (type === 'video' && primaryTool !== 'impact_analyzer' && primaryTool !== 'test_support') {
+            tool = 'video_summarizer';
+          } else if (type === 'image' && primaryTool !== 'impact_analyzer' && primaryTool !== 'test_support') {
+            tool = 'image_insights';
+          } else if (type === 'code' && primaryTool !== 'impact_analyzer' && primaryTool !== 'test_support') {
+            tool = 'code_assistant';
+          }
           let outputs: string[] = [];
           let formattedOutput = '';
           
-          if (tool === 'code_assistant' && type === 'code') {
+          if (tool === 'code_assistant') {
             // Handle AI actions for code pages
             const relatedActions = splitRelatedActions(instruction);
             let lastOutput = '';
@@ -389,7 +418,7 @@ const AgentMode: React.FC<AgentModeProps> = ({ onClose, onModeSelect, autoSpaceK
             toolsTriggered.push('Code Assistant');
             whyUsed.push(`Code Assistant was used to ${instruction.toLowerCase()} for the code page "${page}".`);
             howDerived.push(`The code was processed using AI-powered analysis and transformation techniques.`);
-          } else if (tool === 'image_insights' && type === 'image') {
+          } else if (tool === 'image_insights') {
             // Image summarization using ImageInsights tool (no web search)
             const images = await apiService.getImages(selectedSpace, page);
             let output = '';
@@ -404,8 +433,8 @@ const AgentMode: React.FC<AgentModeProps> = ({ onClose, onModeSelect, autoSpaceK
             toolsTriggered.push('Image Insights');
             whyUsed.push(`Image Insights was used to analyze and summarize the images on page "${page}".`);
             howDerived.push(`The images were processed using computer vision and AI analysis to extract meaningful insights and descriptions.`);
-          } else if (tool === 'ai_powered_search' && (type === 'text' || type === 'code')) {
-            // Summarization for text/code using only AI Powered Search tool (no web search)
+          } else if (tool === 'ai_powered_search') {
+            // Only use AI Powered Search for text/code content, NOT for video/image
             const res = await apiService.search({ space_key: selectedSpace, page_titles: [page], query: instruction });
             outputs.push(res.response);
             formattedOutput = formatAIPoweredSearchOutput(res.response);
@@ -1331,20 +1360,18 @@ ${isHistoryExport ? `*Historical Entry ID: ${currentHistoryId}*` : ''}`;
                                 <div className="mb-6 flex flex-wrap gap-2">
                                   {(outputTabs.find(t => t.id === 'per-page-results')?.results || []).map((r: any) => (
                                     (!('impactAnalyzerResult' in r) && !('testStrategyResult' in r)) && (
-                                      (r.results || []).map((result: { instruction: string, tool: string, outputs: string[], formattedOutput: string }, index: number) => (
-                                        <button
-                                          key={`${r.page}-instruction-${index}`}
-                                          onClick={() => setActiveResult(activeResult && activeResult.key === `${r.page}-instruction-${index}` ? null : { type: 'page', key: `${r.page}-instruction-${index}`, page: r.page, instructionIndex: index })}
-                                          className={`px-5 py-2 rounded-lg font-semibold shadow transition-colors border border-orange-200/50 focus:outline-none focus:ring-2 focus:ring-orange-400/60 focus:ring-offset-2 ${
-                                            activeResult && activeResult.key === `${r.page}-instruction-${index}` 
-                                              ? 'bg-gradient-to-r from-orange-500 to-orange-600 text-white scale-105' 
-                                              : 'bg-white/80 text-orange-700 hover:bg-orange-100'
-                                          }`}
-                                          style={{ minWidth: 120 }}
-                                        >
-                                          {r.page} - {result.instruction.substring(0, 30)}...
-                                        </button>
-                                      ))
+                                      <button
+                                        key={r.page}
+                                        onClick={() => setActiveResult(activeResult && activeResult.key === r.page ? null : { type: 'page', key: r.page, page: r.page, instructionIndex: 0 })}
+                                        className={`px-5 py-2 rounded-lg font-semibold shadow transition-colors border border-orange-200/50 focus:outline-none focus:ring-2 focus:ring-orange-400/60 focus:ring-offset-2 ${
+                                          activeResult && activeResult.key === r.page 
+                                            ? 'bg-gradient-to-r from-orange-500 to-orange-600 text-white scale-105' 
+                                            : 'bg-white/80 text-orange-700 hover:bg-orange-100'
+                                        }`}
+                                        style={{ minWidth: 120 }}
+                                      >
+                                        {r.page}
+                                      </button>
                                     )
                                   ))}
                                 </div>
@@ -1374,10 +1401,7 @@ ${isHistoryExport ? `*Historical Entry ID: ${currentHistoryId}*` : ''}`;
                                 <div className="mt-4">
                                   {(() => {
                                     const pageData = (outputTabs.find(t => t.id === 'per-page-results')?.results || []).find((r: { page: string, results: Array<{ instruction: string, tool: string, outputs: string[], formattedOutput: string }> }) => r.page === activeResult.page);
-                                    if (!pageData || activeResult.instructionIndex === undefined) return null;
-                                    
-                                    const result = pageData.results[activeResult.instructionIndex];
-                                    if (!result) return null;
+                                    if (!pageData) return null;
                                     
                                     return (
                                       <div className="rounded-2xl shadow-xl border border-orange-200/60 bg-white/90 p-6 max-w-4xl mx-auto">
@@ -1385,31 +1409,33 @@ ${isHistoryExport ? `*Historical Entry ID: ${currentHistoryId}*` : ''}`;
                                           <FileText className="w-6 h-6 text-orange-400" />
                                           {pageData.page}
                                         </h3>
-                                        <div className="mb-8 last:mb-0">
-                                          <div className="flex items-center gap-3 mb-4">
-                                            <span className="inline-block px-4 py-2 rounded-full bg-orange-100 text-orange-700 text-sm font-bold uppercase tracking-wide shadow-sm border border-orange-200/60">
-                                              Instruction {activeResult.instructionIndex + 1}
-                                            </span>
-                                                                                          <span className="text-sm text-gray-600 bg-gray-100 px-3 py-1 rounded-full">
+                                        {(pageData.results || []).map((result: { instruction: string, tool: string, outputs: string[], formattedOutput: string }, index: number) => (
+                                          <div key={index} className="mb-8 last:mb-0">
+                                            <div className="flex items-center gap-3 mb-4">
+                                              <span className="inline-block px-4 py-2 rounded-full bg-orange-100 text-orange-700 text-sm font-bold uppercase tracking-wide shadow-sm border border-orange-200/60">
+                                                Instruction {index + 1}
+                                              </span>
+                                              <span className="text-sm text-gray-600 bg-gray-100 px-3 py-1 rounded-full">
                                                 {result.tool.replace(/_/g, ' ').replace(/\b\w/g, (l: string) => l.toUpperCase())}
                                               </span>
-                                          </div>
-                                          <div className="bg-orange-50/80 backdrop-blur-sm rounded-xl p-4 border border-orange-200/40 mb-4">
-                                            <h4 className="text-lg font-semibold text-gray-800 mb-2 flex items-center gap-2">
-                                              <span className="text-orange-600">📝</span>
-                                              "{result.instruction}"
-                                            </h4>
-                                          </div>
-                                          <div className="bg-white/90 backdrop-blur-sm rounded-xl p-6 border border-orange-100/60 shadow-inner">
-                                            <div className="flex items-center gap-2 mb-4">
-                                              <span className="text-orange-600 font-semibold">📊</span>
-                                              <span className="text-lg font-semibold text-gray-800">Result</span>
                                             </div>
-                                            <div className="whitespace-pre-wrap text-gray-700 leading-relaxed">
-                                              {result.formattedOutput}
+                                            <div className="bg-orange-50/80 backdrop-blur-sm rounded-xl p-4 border border-orange-200/40 mb-4">
+                                              <h4 className="text-lg font-semibold text-gray-800 mb-2 flex items-center gap-2">
+                                                <span className="text-orange-600">📝</span>
+                                                "{result.instruction}"
+                                              </h4>
+                                            </div>
+                                            <div className="bg-white/90 backdrop-blur-sm rounded-xl p-6 border border-orange-100/60 shadow-inner">
+                                              <div className="flex items-center gap-2 mb-4">
+                                                <span className="text-orange-600 font-semibold">📊</span>
+                                                <span className="text-lg font-semibold text-gray-800">Result</span>
+                                              </div>
+                                              <div className="whitespace-pre-wrap text-gray-700 leading-relaxed">
+                                                {result.formattedOutput}
+                                              </div>
                                             </div>
                                           </div>
-                                        </div>
+                                        ))}
                                       </div>
                                     );
                                   })()}

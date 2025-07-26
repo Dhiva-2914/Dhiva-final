@@ -92,6 +92,18 @@ const ImpactAnalyzer: React.FC<ImpactAnalyzerProps> = ({ onClose, onFeatureSelec
       const { page } = getConfluenceSpaceAndPageFromUrl();
       if (page && result.pages.includes(page)) {
         setOldPage(page);
+        if (result.pages.length === 2) {
+          const otherPage = result.pages.find(p => p !== page);
+          setNewPage(otherPage || '');
+        } else {
+          setNewPage(page);
+        }
+      } else if (result.pages.length === 1) {
+        setOldPage(result.pages[0]);
+        setNewPage(result.pages[0]);
+      } else if (result.pages.length === 2) {
+        setOldPage(result.pages[0]);
+        setNewPage(result.pages[1]);
       }
     } catch (err) {
       setError('Failed to load pages. Please check your space key.');

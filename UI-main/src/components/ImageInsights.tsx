@@ -91,6 +91,8 @@ const ImageInsights: React.FC<ImageInsightsProps> = ({ onClose, onFeatureSelect,
         const { page } = getConfluenceSpaceAndPageFromUrl();
         if (page && response.pages.includes(page)) {
           setSelectedPages([page]);
+        } else if (response.pages.length === 1) {
+          setSelectedPages([response.pages[0]]);
         }
       } catch (error) {
         console.error('Failed to load pages:', error);

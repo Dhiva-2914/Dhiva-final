@@ -4,6 +4,7 @@ import type { AppMode } from '../App';
 import { apiService, analyzeGoal, getPagesWithType, PageWithType } from '../services/api';
 import { getConfluenceSpaceAndPageFromUrl } from '../utils/urlUtils';
 import { formatAIPoweredSearchOutput, formatCodeAssistantOutput, formatTestSupportOutput, formatImpactAnalyzerOutput, formatImageInsightsOutput, formatVideoSummarizerOutput } from '../utils/toolOutputFormatters';
+import VoiceRecorder from './VoiceRecorder';
 
 interface AgentModeProps {
   onClose: () => void;
@@ -372,7 +373,7 @@ const AgentMode: React.FC<AgentModeProps> = ({ onClose, onModeSelect, autoSpaceK
             whyUsed.push(`Code Assistant was used to ${instruction.toLowerCase()} for the code page "${page}".`);
             howDerived.push(`The code was processed using AI-powered analysis and transformation techniques.`);
           } else if (tool === 'image_insights' && type === 'image') {
-            // Image summarization using ImageInsights tool
+            // Image summarization using ImageInsights tool (no web search)
             const images = await apiService.getImages(selectedSpace, page);
             let output = '';
             if (images && images.images && images.images.length > 0) {
@@ -387,7 +388,7 @@ const AgentMode: React.FC<AgentModeProps> = ({ onClose, onModeSelect, autoSpaceK
             whyUsed.push(`Image Insights was used to analyze and summarize the images on page "${page}".`);
             howDerived.push(`The images were processed using computer vision and AI analysis to extract meaningful insights and descriptions.`);
           } else if (tool === 'ai_powered_search' && (type === 'text' || type === 'code')) {
-            // Summarization for text/code
+            // Summarization for text/code using only AI Powered Search tool (no web search)
             const res = await apiService.search({ space_key: selectedSpace, page_titles: [page], query: instruction });
             outputs.push(res.response);
             formattedOutput = formatAIPoweredSearchOutput(res.response);
@@ -417,7 +418,7 @@ const AgentMode: React.FC<AgentModeProps> = ({ onClose, onModeSelect, autoSpaceK
             whyUsed.push(`Video Summarizer was used to analyze and summarize the video content on page "${page}".`);
             howDerived.push(`The video was processed using AI-powered analysis to extract key moments, timestamps, and comprehensive summaries.`);
           } else {
-            // Fallback: use AI Powered Search for any other type
+            // Fallback: use AI Powered Search for any other type (never web search)
             const res = await apiService.search({ space_key: selectedSpace, page_titles: [page], query: instruction });
             outputs.push(res.response);
             formattedOutput = formatAIPoweredSearchOutput(res.response);
@@ -426,6 +427,7 @@ const AgentMode: React.FC<AgentModeProps> = ({ onClose, onModeSelect, autoSpaceK
             howDerived.push(`The content was processed using general AI analysis to provide relevant information.`);
           }
           if (!pageResults[page]) pageResults[page] = [];
+          // Only push the result for this page/instruction pair
           pageResults[page].push({ instruction, tool, outputs, formattedOutput });
         }
       }
@@ -934,6 +936,11 @@ ${outputTabs.find(tab => tab.id === 'used-tools')?.content || ''}
               <div className="bg-white/60 backdrop-blur-xl rounded-xl p-8 border border-white/20 shadow-lg text-center">
                 <h3 className="text-2xl font-bold text-gray-800 mb-6">What do you want the assistant to help you achieve?</h3>
                 <div className="relative">
+                  {/* Voice Recorder integration for goal input */}
+                  <VoiceRecorder
+                    onConfirm={t => setGoal(t)}
+                    inputPlaceholder="Speak or type your goal..."
+                  />
                   <textarea
                     value={goal}
                     onChange={(e) => setGoal(e.target.value)}

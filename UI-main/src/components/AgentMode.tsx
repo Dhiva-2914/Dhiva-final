@@ -352,50 +352,43 @@ const AgentMode: React.FC<AgentModeProps> = ({ onClose, onModeSelect, autoSpaceK
           whyUsed.push('Impact Analyzer was used because the instruction requested a code impact analysis between two uploaded pages.');
           howDerived.push(`The impact analysis was performed by comparing the code content of the two pages using the Impact Analyzer.`);
         }
-        // Special handling for sequential code actions and impact analysis
-        else if (matchedPages.length === 1 && toolForInstruction === 'code_assistant') {
-          const relatedActions = splitRelatedActions(instruction);
-          let lastOutput = '';
-          let outputs: string[] = [];
-          for (const action of relatedActions) {
-            const code = lastOutput || '';
-            const actionPrompts = codeAiActionPromptMap(code);
-            const prompt = actionPrompts[action] || action || Object.values(actionPrompts)[0];
-            const res = await apiService.codeAssistant({ space_key: selectedSpace, page_title: matchedPages[0], instruction: prompt });
-            lastOutput = res.modified_code || res.converted_code || res.original_code || res.summary || '';
-            outputs.push(lastOutput);
+        // Handle Code Assistant for code modification/enhancement tasks
+        else if (toolForInstruction === 'code_assistant' && matchedPages.length >= 1) {
+          // Check if instruction is code-related
+          const codeRelatedKeywords = /optimize|refactor|dead\s*code|documentation|logging|convert|enhance|improve|clean|restructure|modernize|update|fix|debug|analyze\s*code|review\s*code/i;
+          if (codeRelatedKeywords.test(instruction)) {
+            for (const page of matchedPages) {
+              const pageType = pageTypeMap[page] || 'text';
+              if (pageType === 'code') {
+                const relatedActions = splitRelatedActions(instruction);
+                let lastOutput = '';
+                let outputs: string[] = [];
+                for (const action of relatedActions) {
+                  const code = lastOutput || '';
+                  const actionPrompts = codeAiActionPromptMap(code);
+                  const prompt = actionPrompts[action] || action || Object.values(actionPrompts)[0];
+                  const res = await apiService.codeAssistant({ space_key: selectedSpace, page_title: page, instruction: prompt });
+                  lastOutput = res.modified_code || res.converted_code || res.original_code || res.summary || '';
+                  outputs.push(lastOutput);
+                }
+                if (!pageResults[page]) pageResults[page] = { tool: 'Code Assistant', outputs: [] };
+                pageResults[page].outputs.push(...outputs);
+                optimizedCodeByPage[page] = lastOutput;
+              }
+            }
+            toolsTriggered.push('Code Assistant');
+            whyUsed.push('Code Assistant was used because the instruction requested code modification, optimization, or enhancement tasks.');
+            howDerived.push(`The code improvements were applied using the Code Assistant's specialized logic for code analysis and transformation.`);
           }
-          pageResults[matchedPages[0]] = { tool: 'Code Assistant', outputs };
-          optimizedCodeByPage[matchedPages[0]] = lastOutput;
-        } else if (toolForInstruction === 'impact_analyzer' && matchedPages.length === 2) {
-          // If previous instruction was a code modification for page_1, use optimized code for impact analysis
-          const [page1, page2] = matchedPages;
-          let oldCode = optimizedCodeByPage[page1] || '';
-          let newCode = '';
-          // If the user just optimized page_1, use that output
-          // (In a real implementation, you might need to update the backend to accept raw code for impact analysis)
-          // For now, just call the API as usual
-          const res = await apiService.impactAnalyzer({ space_key: selectedSpace, old_page_title: page1, new_page_title: page2, question: instruction });
-          // Extract risk rating and risk difference from the response if available
-          let riskRating = res.risk_score || 0;
-          let riskDiff = res.percentage_change || 0;
-          impactResults.push({ page: `${page1} vs ${page2}`, result: res.impact_analysis, riskRating, riskDiff });
-        } else if (toolForInstruction === 'impact_analyzer' && matchedPages.length === 1) {
+        }
+        // Handle other tools based on content type and instruction
+        else {
           for (const page of matchedPages) {
-            const res = await apiService.impactAnalyzer({ space_key: selectedSpace, old_page_title: page, new_page_title: page, question: instruction });
-            let riskRating = res.risk_score || 0;
-            let riskDiff = res.percentage_change || 0;
-            impactResults.push({ page, result: res.impact_analysis, riskRating, riskDiff });
-          }
-        } else {
-          for (const page of matchedPages) {
+            const pageType = pageTypeMap[page] || 'text';
             let output = '';
             let toolLabel = '';
-            if (toolForInstruction === 'ai_powered_search') {
-              const res = await apiService.search({ space_key: selectedSpace, page_titles: [page], query: instruction });
-              output = res.response;
-              toolLabel = 'AI Powered Search';
-            } else if (toolForInstruction === 'video_summarizer') {
+            
+            if (toolForInstruction === 'video_summarizer' && pageType === 'video') {
               const res = await apiService.videoSummarizer({ space_key: selectedSpace, page_title: page });
               if (res.timestamps && Array.isArray(res.timestamps) && res.timestamps.length > 0) {
                 output = res.timestamps.map((ts: string, idx: number) => {
@@ -406,27 +399,50 @@ const AgentMode: React.FC<AgentModeProps> = ({ onClose, onModeSelect, autoSpaceK
                 output = 'No timestamped summary available.';
               }
               toolLabel = 'Video Summarizer';
-            } else if (toolForInstruction === 'test_support') {
-              const res = await apiService.testSupport({ space_key: selectedSpace, code_page_title: page });
-              output = res.test_strategy || res.ai_response || '';
-              toolLabel = 'Test Support';
-            } else if (toolForInstruction === 'image_insights') {
+              if (!toolsTriggered.includes('Video Summarizer')) {
+                toolsTriggered.push('Video Summarizer');
+                whyUsed.push('Video Summarizer was used because the instruction requested video content analysis and the page contains video content.');
+                howDerived.push(`The video summary was generated by analyzing the video content and extracting key timestamps and insights.`);
+              }
+            } else if (toolForInstruction === 'image_insights' && pageType === 'image') {
               const images = await apiService.getImages(selectedSpace, page);
               if (images && images.images && images.images.length > 0) {
                 const summaries = await Promise.all(images.images.map((imgUrl: string) => apiService.imageSummary({ space_key: selectedSpace, page_title: page, image_url: imgUrl })));
                 output = summaries.map((s, i) => `Image ${i + 1}: ${s.summary}`).join('\n');
               }
               toolLabel = 'Image Insights';
-            } else if (toolForInstruction === 'chart_builder') {
+              if (!toolsTriggered.includes('Image Insights')) {
+                toolsTriggered.push('Image Insights');
+                whyUsed.push('Image Insights was used because the instruction requested image analysis and the page contains image content.');
+                howDerived.push(`The image analysis was performed by extracting and analyzing visual content from the page images.`);
+              }
+            } else if (toolForInstruction === 'ai_powered_search' && pageType === 'text') {
+              const res = await apiService.search({ space_key: selectedSpace, page_titles: [page], query: instruction });
+              output = res.response;
+              toolLabel = 'AI Powered Search';
+              if (!toolsTriggered.includes('AI Powered Search')) {
+                toolsTriggered.push('AI Powered Search');
+                whyUsed.push('AI Powered Search was used because the instruction requested text-based analysis and the page contains textual content.');
+                howDerived.push(`The search results were generated by analyzing the textual content using AI-powered search capabilities.`);
+              }
+            } else if (toolForInstruction === 'chart_builder' && pageType === 'image') {
               const images = await apiService.getImages(selectedSpace, page);
               if (images && images.images && images.images.length > 0) {
                 const charts = await Promise.all(images.images.map((imgUrl: string) => apiService.createChart({ space_key: selectedSpace, page_title: page, image_url: imgUrl, chart_type: 'bar', filename: 'chart', format: 'png' })));
                 output = charts.map((c, i) => `Chart ${i + 1}: [Chart Image]`).join('\n');
               }
               toolLabel = 'Chart Builder';
+              if (!toolsTriggered.includes('Chart Builder')) {
+                toolsTriggered.push('Chart Builder');
+                whyUsed.push('Chart Builder was used because the instruction requested chart generation from image data.');
+                howDerived.push(`The charts were created by analyzing image content and converting it into visual chart representations.`);
+              }
             }
-            if (!pageResults[page]) pageResults[page] = { tool: toolLabel, outputs: [] };
-            pageResults[page].outputs.push(output);
+            
+            if (output && toolLabel) {
+              if (!pageResults[page]) pageResults[page] = { tool: toolLabel, outputs: [] };
+              pageResults[page].outputs.push(output);
+            }
           }
         }
       }
@@ -437,12 +453,29 @@ const AgentMode: React.FC<AgentModeProps> = ({ onClose, onModeSelect, autoSpaceK
       setPlanSteps((steps) => steps.map((s) => s.id === 2 ? { ...s, status: 'completed' } : s));
       setCurrentStep(2);
       setProgressPercent(100);
-      // Reasoning section: always fill with 3 lines
-      const reasoning = [
+      
+      // Enhanced reasoning section with detailed tool descriptions
+      const toolDescriptions: Record<string, string> = {
+        'Code Assistant': 'Specialized tool for code optimization, refactoring, dead code detection, documentation generation, and code transformation tasks.',
+        'Impact Analyzer': 'Tool for analyzing code changes and their impact, providing risk assessments and metrics for code modifications.',
+        'Test Support Tool': 'Tool for generating comprehensive test strategies and test cases based on code analysis.',
+        'Video Summarizer': 'Tool for extracting key insights and timestamps from video content for efficient content review.',
+        'Image Insights': 'Tool for analyzing visual content and extracting meaningful insights from images.',
+        'AI Powered Search': 'Intelligent search tool for analyzing and extracting information from textual content.',
+        'Chart Builder': 'Tool for creating visual charts and graphs from data extracted from images or content.'
+      };
+      
+      let reasoning = [
         `Tools triggered: ${toolsTriggered.join(', ') || 'None'}.`,
-        whyUsed[0] || 'The tools were chosen based on the user instruction and content type of the uploaded pages.',
-        howDerived[0] || 'The answer was derived by applying the selected tools to the uploaded pages as per the instruction.'
+        whyUsed.length > 0 ? whyUsed.join(' ') : 'The tools were chosen based on the user instruction and content type of the uploaded pages.',
+        howDerived.length > 0 ? howDerived.join(' ') : 'The answer was derived by applying the selected tools to the uploaded pages as per the instruction.'
       ].join('\n');
+      
+      // Add tool descriptions to reasoning if tools were used
+      if (toolsTriggered.length > 0) {
+        const descriptions = toolsTriggered.map(tool => toolDescriptions[tool] || `${tool}: Tool for processing content based on user instructions.`).join(' ');
+        reasoning += `\n\nTool descriptions: ${descriptions}`;
+      }
       // Prepare output tabs for new UI
       const impactTab = impactResults.length > 0 ? {
         id: 'impact-analysed',

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Zap, X, Send, Download, RotateCcw, FileText, Brain, CheckCircle, Loader2, MessageSquare, Plus, ChevronDown } from 'lucide-react';
+import { Zap, X, Send, Download, RotateCcw, FileText, Brain, CheckCircle, Loader2, MessageSquare, Plus, ChevronDown, TrendingUp, TestTube } from 'lucide-react';
 import type { AppMode } from '../App';
 import { apiService, analyzeGoal, getPagesWithType, PageWithType } from '../services/api';
 import { getConfluenceSpaceAndPageFromUrl } from '../utils/urlUtils';
@@ -290,6 +290,9 @@ const AgentMode: React.FC<AgentModeProps> = ({ onClose, onModeSelect, autoSpaceK
     let reasoningLines: string[] = [];
     let impactAnalyzerResult: React.ReactNode | null = null;
     let testStrategyResult: React.ReactNode | null = null;
+    let toolsTriggered: string[] = [];
+    let whyUsed: string[] = [];
+    let howDerived: string[] = [];
     try {
       setPlanSteps((steps) => steps.map((s) => s.id === 1 ? { ...s, status: 'running' } : s));
       setCurrentStep(0);
@@ -297,9 +300,7 @@ const AgentMode: React.FC<AgentModeProps> = ({ onClose, onModeSelect, autoSpaceK
       const instructions = splitInstructions(goal);
       // Map each instruction to the correct page/tool based on content type and intent
       const pageResults: Record<string, Array<{ instruction: string, tool: string, outputs: string[], formattedOutput: string }>> = {};
-      let toolsTriggered: string[] = [];
-      let whyUsed: string[] = [];
-      let howDerived: string[] = [];
+      
       for (const page of selectedPages) {
         const type = (pageTypes.find(p => p.title === page)?.content_type) || 'text';
         for (let i = 0; i < instructions.length; i++) {
@@ -307,6 +308,7 @@ const AgentMode: React.FC<AgentModeProps> = ({ onClose, onModeSelect, autoSpaceK
           const tool = await determineToolByIntentAndContent(instruction, selectedSpace, page);
           let outputs: string[] = [];
           let formattedOutput = '';
+          
           if (tool === 'code_assistant' && type === 'code') {
             // Handle AI actions for code pages
             const relatedActions = splitRelatedActions(instruction);
@@ -366,11 +368,32 @@ const AgentMode: React.FC<AgentModeProps> = ({ onClose, onModeSelect, autoSpaceK
               outputs.push(`Processed Code:\n${lastOutput}`);
             }
             formattedOutput = formatCodeAssistantOutput(outputs);
+            toolsTriggered.push('Code Assistant');
+            whyUsed.push(`Code Assistant was used to ${instruction.toLowerCase()} for the code page "${page}".`);
+            howDerived.push(`The code was processed using AI-powered analysis and transformation techniques.`);
+          } else if (tool === 'image_insights' && type === 'image') {
+            // Image summarization using ImageInsights tool
+            const images = await apiService.getImages(selectedSpace, page);
+            let output = '';
+            if (images && images.images && images.images.length > 0) {
+              const summaries = await Promise.all(images.images.map((imgUrl: string) => apiService.imageSummary({ space_key: selectedSpace, page_title: page, image_url: imgUrl })));
+              output = summaries.map((s, i) => `Image ${i + 1}: ${s.summary}`).join('\n\n');
+            } else {
+              output = 'No images found on this page.';
+            }
+            outputs.push(output);
+            formattedOutput = formatImageInsightsOutput([{ name: page, summary: output }]);
+            toolsTriggered.push('Image Insights');
+            whyUsed.push(`Image Insights was used to analyze and summarize the images on page "${page}".`);
+            howDerived.push(`The images were processed using computer vision and AI analysis to extract meaningful insights and descriptions.`);
           } else if (tool === 'ai_powered_search' && (type === 'text' || type === 'code')) {
             // Summarization for text/code
             const res = await apiService.search({ space_key: selectedSpace, page_titles: [page], query: instruction });
             outputs.push(res.response);
             formattedOutput = formatAIPoweredSearchOutput(res.response);
+            toolsTriggered.push('AI Powered Search');
+            whyUsed.push(`AI Powered Search was used to analyze and summarize the content on page "${page}".`);
+            howDerived.push(`The content was processed using natural language processing to extract key information and provide comprehensive summaries.`);
           } else if (tool === 'video_summarizer' && type === 'video') {
             // Summarization for video
             const res = await apiService.videoSummarizer({ space_key: selectedSpace, page_title: page });
@@ -390,26 +413,143 @@ const AgentMode: React.FC<AgentModeProps> = ({ onClose, onModeSelect, autoSpaceK
               timestamps: res.timestamps || [],
               quotes: res.quotes || []
             });
-          } else if (tool === 'image_insights' && type === 'image') {
-            // Summarization for image
-            const images = await apiService.getImages(selectedSpace, page);
-            let output = '';
-            if (images && images.images && images.images.length > 0) {
-              const summaries = await Promise.all(images.images.map((imgUrl: string) => apiService.imageSummary({ space_key: selectedSpace, page_title: page, image_url: imgUrl })));
-              output = summaries.map((s, i) => `Image ${i + 1}: ${s.summary}`).join('\n');
-            }
-            outputs.push(output);
-            formattedOutput = formatImageInsightsOutput([{ name: page, summary: output }]);
+            toolsTriggered.push('Video Summarizer');
+            whyUsed.push(`Video Summarizer was used to analyze and summarize the video content on page "${page}".`);
+            howDerived.push(`The video was processed using AI-powered analysis to extract key moments, timestamps, and comprehensive summaries.`);
           } else {
             // Fallback: use AI Powered Search for any other type
             const res = await apiService.search({ space_key: selectedSpace, page_titles: [page], query: instruction });
             outputs.push(res.response);
             formattedOutput = formatAIPoweredSearchOutput(res.response);
+            toolsTriggered.push('AI Powered Search');
+            whyUsed.push(`AI Powered Search was used as a fallback to analyze the content on page "${page}".`);
+            howDerived.push(`The content was processed using general AI analysis to provide relevant information.`);
           }
           if (!pageResults[page]) pageResults[page] = [];
           pageResults[page].push({ instruction, tool, outputs, formattedOutput });
         }
       }
+      
+      // Handle special cases for Impact Analyzer and Test Strategy
+      if (selectedPages.length === 2) {
+        const hasImpactInstruction = instructions.some(instruction => /impact|compare|difference|diff/i.test(instruction));
+        const hasTestInstruction = instructions.some(instruction => /test|qa|test case|unit test/i.test(instruction));
+        
+        if (hasImpactInstruction) {
+          const [oldPage, newPage] = selectedPages;
+          const res = await apiService.impactAnalyzer({ space_key: selectedSpace, old_page_title: oldPage, new_page_title: newPage, question: goal });
+          impactAnalyzerResult = (
+            <div className="bg-white/60 backdrop-blur-xl rounded-xl p-4 border border-white/20 shadow-lg max-w-4xl mx-auto">
+              <h3 className="font-semibold text-gray-800 mb-4 flex items-center">
+                <TrendingUp className="w-5 h-5 mr-2 text-orange-500" />
+                Impact Analysis: {oldPage} vs {newPage}
+              </h3>
+              <div className="mb-6">
+                <h4 className="font-semibold text-gray-800 mb-3">Change Metrics</h4>
+                <div className="grid grid-cols-2 gap-3 text-sm">
+                  <div className="bg-green-100/80 backdrop-blur-sm p-3 rounded-lg text-center border border-white/20">
+                    <div className="font-semibold text-green-800 text-lg">+{res.lines_added || 0}</div>
+                    <div className="text-green-600 text-xs">Lines Added</div>
+                  </div>
+                  <div className="bg-red-100/80 backdrop-blur-sm p-3 rounded-lg text-center border border-white/20">
+                    <div className="font-semibold text-red-800 text-lg">-{res.lines_removed || 0}</div>
+                    <div className="text-red-600 text-xs">Lines Removed</div>
+                  </div>
+                  <div className="bg-blue-100/80 backdrop-blur-sm p-3 rounded-lg text-center border border-white/20">
+                    <div className="font-semibold text-blue-800 text-lg">{res.files_changed || 1}</div>
+                    <div className="text-blue-600 text-xs">Files Changed</div>
+                  </div>
+                  <div className="bg-purple-100/80 backdrop-blur-sm p-3 rounded-lg text-center border border-white/20">
+                    <div className="font-semibold text-purple-800 text-lg">{res.percentage_change || 0}%</div>
+                    <div className="text-purple-600 text-xs">Percentage Changed</div>
+                  </div>
+                </div>
+              </div>
+              <div className="mb-6">
+                <h4 className="font-semibold text-gray-800 mb-3">Risk Assessment</h4>
+                <div className={`p-4 rounded-lg flex items-center space-x-3 border ${res.risk_level === 'low' ? 'text-green-700 bg-green-100/80 border-green-200/50' : res.risk_level === 'medium' ? 'text-yellow-700 bg-yellow-100/80 border-yellow-200/50' : 'text-red-700 bg-red-100/80 border-red-200/50'}`}>
+                  <span className="text-2xl">{res.risk_level === 'low' ? '🟢' : res.risk_level === 'medium' ? '🟡' : '⚠️'}</span>
+                  <div>
+                    <div className="font-semibold capitalize text-lg">{res.risk_level || 'low'} Risk</div>
+                    <div className="text-sm">Risk Score: {res.risk_score || 0}/10</div>
+                  </div>
+                </div>
+              </div>
+              <div className="mb-6">
+                <h3 className="font-semibold text-gray-800 mb-4">Code Diff</h3>
+                <div className="bg-gray-900/90 backdrop-blur-sm rounded-lg p-4 overflow-auto max-h-80 border border-white/10">
+                  <pre className="text-sm">
+                    <code>
+                      {res.diff && res.diff.split('\n').map((line: string, idx: number) => (
+                        <div
+                          key={idx}
+                          className={
+                            line.startsWith('+') ? 'text-green-400' :
+                            line.startsWith('-') ? 'text-red-400' :
+                            line.startsWith('@@') ? 'text-blue-400' :
+                            'text-gray-300'
+                          }
+                        >
+                          {line}
+                        </div>
+                      ))}
+                    </code>
+                  </pre>
+                </div>
+              </div>
+              <div className="mb-6">
+                <h3 className="font-semibold text-gray-800 mb-4">AI Impact Summary</h3>
+                <div className="bg-white/70 backdrop-blur-sm rounded-lg p-4 border border-white/20 prose prose-sm max-w-none">
+                  {res.impact_analysis && res.impact_analysis.split('\n').map((line: string, idx: number) => (
+                    <p key={idx} className="mb-2 text-gray-700">{line}</p>
+                  ))}
+                </div>
+              </div>
+            </div>
+          );
+          toolsTriggered.push('Impact Analyzer');
+          whyUsed.push(`Impact Analyzer was used to compare the changes between "${oldPage}" and "${newPage}".`);
+          howDerived.push(`The analysis was performed by comparing code differences, calculating metrics, and assessing potential risks.`);
+        }
+        
+        if (hasTestInstruction) {
+          const [codePage, testInputPage] = selectedPages;
+          const res = await apiService.testSupport({ space_key: selectedSpace, code_page_title: codePage, test_input_page_title: testInputPage, question: goal });
+          testStrategyResult = (
+            <div className="bg-white/60 backdrop-blur-xl rounded-xl p-4 border border-white/20 shadow-lg max-w-4xl mx-auto">
+              <h3 className="font-semibold text-gray-800 mb-4 flex items-center">
+                <TestTube className="w-5 h-5 mr-2 text-orange-500" />
+                Test Strategy: {codePage} & {testInputPage}
+              </h3>
+              <div className="bg-white/70 backdrop-blur-sm rounded-lg p-4 border border-white/20 prose prose-sm max-w-none">
+                {res.test_strategy && res.test_strategy.split('\n').map((line: string, idx: number) => {
+                  if (line.startsWith('### ')) {
+                    return <h3 key={idx} className="text-lg font-bold text-gray-800 mt-4 mb-2">{line.substring(4)}</h3>;
+                  } else if (line.startsWith('## ')) {
+                    return <h2 key={idx} className="text-xl font-bold text-gray-800 mt-6 mb-3">{line.substring(3)}</h2>;
+                  } else if (line.startsWith('# ')) {
+                    return <h1 key={idx} className="text-2xl font-bold text-gray-800 mt-8 mb-4">{line.substring(2)}</h1>;
+                  } else if (line.startsWith('- **')) {
+                    const match = line.match(/- \*\*(.*?)\*\*: (.*)/);
+                    if (match) {
+                      return <p key={idx} className="mb-2"><strong>{match[1]}:</strong> {match[2]}</p>;
+                    }
+                  } else if (line.startsWith('- ')) {
+                    return <p key={idx} className="mb-1 ml-4">• {line.substring(2)}</p>;
+                  } else if (line.trim()) {
+                    return <p key={idx} className="mb-2 text-gray-700">{line}</p>;
+                  }
+                  return <br key={idx} />;
+                })}
+              </div>
+            </div>
+          );
+          toolsTriggered.push('Test Support Tool');
+          whyUsed.push(`Test Support Tool was used to generate test strategies for "${codePage}" using "${testInputPage}" as input.`);
+          howDerived.push(`The test strategy was generated by analyzing the code structure and test requirements using AI-powered testing methodologies.`);
+        }
+      }
+      
       setPlanSteps((steps) => steps.map((s) => s.id === 1 ? { ...s, status: 'completed' } : s));
       setCurrentStep(1);
       setProgressPercent(50);
@@ -437,7 +577,34 @@ const AgentMode: React.FC<AgentModeProps> = ({ onClose, onModeSelect, autoSpaceK
           id: 'reasoning',
           label: 'Reasoning',
           icon: Brain,
-          content: whyUsed.join('\n') || 'The tools were chosen based on the user instruction and content type of the uploaded pages.',
+          content: `# Analysis Summary
+
+## Goal
+${goal}
+
+## Selected Pages
+${selectedPages.join(', ')}
+
+## Tools Used
+${[...new Set(toolsTriggered)].join(', ')}
+
+## Why These Tools Were Chosen
+
+${whyUsed.map((reason, index) => `${index + 1}. ${reason}`).join('\n')}
+
+## How Results Were Derived
+
+${howDerived.map((method, index) => `${index + 1}. ${method}`).join('\n')}
+
+## Processing Summary
+
+- **Total Instructions Processed:** ${instructions.length}
+- **Pages Analyzed:** ${selectedPages.length}
+- **Analysis Completed:** ${new Date().toLocaleString()}
+
+---
+
+The AI assistant analyzed your request and automatically selected the most appropriate tools based on the content type of each page and the nature of your instructions. Each tool was chosen to provide the most relevant and accurate results for your specific needs.`,
         },
         {
           id: 'selected-pages',
@@ -953,20 +1120,35 @@ ${outputTabs.find(tab => tab.id === 'used-tools')?.content || ''}
                                     const pageData = (outputTabs.find(t => t.id === 'per-page-results')?.results || []).find((r: { page: string, results: Array<{ instruction: string, tool: string, outputs: string[], formattedOutput: string }> }) => r.page === activeResult.key);
                                     if (!pageData) return null;
                                     return (
-                                      <div className="rounded-2xl shadow-xl border border-orange-200/60 bg-white/90 p-6 max-w-3xl mx-auto animate-fade-in">
+                                      <div className="rounded-2xl shadow-xl border border-orange-200/60 bg-white/90 p-6 max-w-4xl mx-auto">
                                         <h3 className="text-2xl font-extrabold text-orange-700 mb-6 flex items-center gap-2">
                                           <FileText className="w-6 h-6 text-orange-400" />
                                           {pageData.page}
                                         </h3>
                                         {(pageData.results || []).map((result: { instruction: string, tool: string, outputs: string[], formattedOutput: string }, index: number) => (
                                           <div key={index} className="mb-8 last:mb-0">
-                                            <div className="flex items-center gap-2 mb-2">
-                                              <span className="inline-block px-3 py-1 rounded-full bg-orange-100 text-orange-700 text-xs font-bold uppercase tracking-wide shadow-sm border border-orange-200/60">Instruction {index + 1}</span>
-                                              <span className="text-gray-500 text-xs">{result.tool.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}</span>
+                                            <div className="flex items-center gap-3 mb-4">
+                                              <span className="inline-block px-4 py-2 rounded-full bg-orange-100 text-orange-700 text-sm font-bold uppercase tracking-wide shadow-sm border border-orange-200/60">
+                                                Instruction {index + 1}
+                                              </span>
+                                              <span className="text-sm text-gray-600 bg-gray-100 px-3 py-1 rounded-full">
+                                                {result.tool.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}
+                                              </span>
                                             </div>
-                                            <div className="text-base font-semibold text-gray-800 mb-2">"{result.instruction}"</div>
-                                            <div className="whitespace-pre-wrap text-gray-700 border border-orange-100 rounded-xl p-4 bg-orange-50/60 shadow-inner overflow-x-auto">
-                                              {result.formattedOutput}
+                                            <div className="bg-orange-50/80 backdrop-blur-sm rounded-xl p-4 border border-orange-200/40 mb-4">
+                                              <h4 className="text-lg font-semibold text-gray-800 mb-2 flex items-center gap-2">
+                                                <span className="text-orange-600">📝</span>
+                                                "{result.instruction}"
+                                              </h4>
+                                            </div>
+                                            <div className="bg-white/90 backdrop-blur-sm rounded-xl p-6 border border-orange-100/60 shadow-inner">
+                                              <div className="flex items-center gap-2 mb-4">
+                                                <span className="text-orange-600 font-semibold">📊</span>
+                                                <span className="text-lg font-semibold text-gray-800">Result</span>
+                                              </div>
+                                              <div className="whitespace-pre-wrap text-gray-700 leading-relaxed">
+                                                {result.formattedOutput}
+                                              </div>
                                             </div>
                                           </div>
                                         ))}

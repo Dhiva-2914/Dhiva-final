@@ -1,7 +1,6 @@
-import React, { useState, useEffect } from 'react';
-import { Zap, Wrench, X, Mic } from 'lucide-react';
+import React, { useState } from 'react';
+import { Zap, Wrench, X } from 'lucide-react';
 import type { AppMode } from '../App';
-import VoiceRecorder from './VoiceRecorder';
 
 interface ModeSelectorProps {
   onModeSelect: (mode: AppMode) => void;
@@ -10,21 +9,9 @@ interface ModeSelectorProps {
 
 const ModeSelector: React.FC<ModeSelectorProps> = ({ onModeSelect, onClose }) => {
   const [selectedMode, setSelectedMode] = useState<'agent' | 'tool'>('tool');
-  const [voiceCommand, setVoiceCommand] = useState('');
 
   const handleModeChange = (mode: 'agent' | 'tool') => {
     setSelectedMode(mode);
-  };
-
-  const handleVoiceCommand = (command: string) => {
-    setVoiceCommand(command);
-    const lowerCommand = command.toLowerCase();
-    
-    if (lowerCommand.includes('agent') || lowerCommand.includes('goal') || lowerCommand.includes('plan')) {
-      setSelectedMode('agent');
-    } else if (lowerCommand.includes('tool') || lowerCommand.includes('search') || lowerCommand.includes('code')) {
-      setSelectedMode('tool');
-    }
   };
 
   const handleConfirm = () => {
@@ -123,27 +110,6 @@ const ModeSelector: React.FC<ModeSelectorProps> = ({ onModeSelect, onClose }) =>
                 </p>
               </div>
             )}
-          </div>
-
-          {/* Voice Command Section */}
-          <div className="mb-6">
-            <div className="bg-gray-50/80 backdrop-blur-sm rounded-xl p-4 border border-gray-200/50">
-              <h4 className="text-sm font-semibold text-gray-700 mb-3 flex items-center">
-                <Mic className="w-4 h-4 mr-2 text-gray-500" />
-                Voice Commands
-              </h4>
-              <VoiceRecorder
-                onConfirm={handleVoiceCommand}
-                inputPlaceholder="Say 'agent mode' or 'tool mode'..."
-                showInput={false}
-                autoConfirm={true}
-              />
-              {voiceCommand && (
-                <div className="mt-2 text-xs text-gray-600 bg-white/60 backdrop-blur-sm rounded px-2 py-1">
-                  Command: "{voiceCommand}"
-                </div>
-              )}
-            </div>
           </div>
 
           {/* Confirm Button */}

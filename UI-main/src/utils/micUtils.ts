@@ -46,29 +46,16 @@ export async function activateMicrophone(onAllowed: (stream: MediaStream|null) =
   }
 }
 
-/**
- * Helper to wire up a mic button for Web Speech API or getUserMedia, enforcing user gesture and robust permission checks.
- * Usage: setupMicButton('mic-btn', (stream) => { ... });
- */
-export function setupMicButton(buttonId: string, onStream: (stream: MediaStream|null) => void) {
-  const btn = document.getElementById(buttonId);
-  if (!btn) {
-    console.warn('Mic button not found:', buttonId);
-    return;
-  }
-  btn.onclick = () => activateMicrophone(onStream);
-}
 
-/**
- * Utility for robust microphone access with permission checks and error handling
- *
- * IMPORTANT: If your app is embedded in an iframe (e.g., in Confluence), ensure the iframe tag includes:
- *   <iframe src="your-app.html" allow="microphone"></iframe>
- * If you use sandbox, add:
- *   <iframe sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-modals allow-pointer-lock allow-speech" ...>
- *
- * Always call requestMicrophoneAccess() from a user gesture (e.g., button click).
- */
+
+// Utility for robust microphone access with permission checks and error handling
+//
+// IMPORTANT: If your app is embedded in an iframe (e.g., in Confluence), ensure the iframe tag includes:
+//   <iframe src="your-app.html" allow="microphone"></iframe>
+// If you use sandbox, add:
+//   <iframe sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-modals allow-pointer-lock allow-speech" ...>
+//
+// Always call requestMicrophoneAccess() from a user gesture (e.g., button click).
 
 /**
  * Requests microphone access with robust permission and context checks.
@@ -120,7 +107,7 @@ export async function requestMicrophoneAccess(): Promise<MediaStream|null> {
  * Helper to wire up a mic button with correct user gesture and permission checks.
  * Usage: call setupMicButton('mic-btn', (stream) => { ... });
  */
-export function setupMicButtonWithGesture(buttonId: string, onStream: (stream: MediaStream|null) => void) {
+export function setupMicButton(buttonId: string, onStream: (stream: MediaStream|null) => void) {
   const btn = document.getElementById(buttonId);
   if (!btn) {
     console.warn('Mic button not found:', buttonId);
@@ -167,36 +154,4 @@ export async function diagnoseMicAccess() {
   }
   // 6. Advise on Chrome site settings
   console.log('Check chrome://settings/content/microphone and ensure this site and parent Confluence domain are not blocked.');
-}
-
-/**
- * Check if speech recognition is supported in the current browser
- */
-export function isSpeechRecognitionSupported(): boolean {
-  if (typeof window === 'undefined') return false;
-  return !!(window as any).webkitSpeechRecognition || !!(window as any).SpeechRecognition;
-}
-
-/**
- * Get the appropriate SpeechRecognition constructor for the current browser
- */
-export function getSpeechRecognitionConstructor(): any {
-  if (typeof window === 'undefined') return null;
-  return (window as any).webkitSpeechRecognition || (window as any).SpeechRecognition;
-}
-
-/**
- * Create a speech recognition instance with proper configuration
- */
-export function createSpeechRecognition(): any {
-  const SpeechRecognition = getSpeechRecognitionConstructor();
-  if (!SpeechRecognition) return null;
-  
-  const recognition = new SpeechRecognition();
-  recognition.continuous = false;
-  recognition.interimResults = false;
-  recognition.lang = 'en-US';
-  recognition.maxAlternatives = 1;
-  
-  return recognition;
 } 

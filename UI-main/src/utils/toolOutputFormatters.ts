@@ -18,48 +18,43 @@ export function formatCodeAssistantOutput(outputs: string[]): string {
   }).join('\n');
 }
 
-export function formatTestSupportOutput(report: { strategy?: string, crossPlatform?: string, sensitivity?: string, qa?: { question: string, answer: string }[] }): string {
-  let out = '';
-  if (report.strategy) out += `## Test Strategy\n${report.strategy}\n`;
-  if (report.crossPlatform) out += `\n## Cross-Platform Analysis\n${report.crossPlatform}\n`;
-  if (report.sensitivity) out += `\n## Sensitivity Analysis\n${report.sensitivity}\n`;
-  if (report.qa && report.qa.length > 0) {
-    out += '\n## Q&A\n' + report.qa.map(qa => `**Q:** ${qa.question}\n**A:** ${qa.answer}`).join('\n\n');
+export function formatTestSupportOutput(strategy: string): string {
+  return `## Test Strategy\n${strategy}`;
+}
+
+export function formatImpactAnalyzerOutput(result: { 
+  impact_analysis: string, 
+  risk_score?: number, 
+  risk_level?: string, 
+  lines_added?: number, 
+  lines_removed?: number, 
+  files_changed?: number, 
+  percentage_change?: number 
+}): string {
+  let out = '## Impact Analysis\n\n';
+  out += result.impact_analysis;
+  
+  if (result.risk_score !== undefined || result.risk_level) {
+    out += '\n\n## Risk Assessment\n';
+    if (result.risk_level) out += `- **Risk Level**: ${result.risk_level.toUpperCase()}\n`;
+    if (result.risk_score !== undefined) out += `- **Risk Score**: ${result.risk_score}/10\n`;
   }
+  
+  if (result.lines_added !== undefined || result.lines_removed !== undefined || result.files_changed !== undefined || result.percentage_change !== undefined) {
+    out += '\n## Metrics\n';
+    if (result.lines_added !== undefined) out += `- Lines Added: ${result.lines_added}\n`;
+    if (result.lines_removed !== undefined) out += `- Lines Removed: ${result.lines_removed}\n`;
+    if (result.files_changed !== undefined) out += `- Files Changed: ${result.files_changed}\n`;
+    if (result.percentage_change !== undefined) out += `- Percentage Changed: ${result.percentage_change}%\n`;
+  }
+  
   return out;
 }
 
-export function formatImpactAnalyzerOutput(result: { metrics?: any, riskLevel?: any, impactSummary?: string, diffResults?: string, qa?: { question: string, answer: string }[] }): string {
-  let out = '## Metrics\n';
-  if (result.metrics) {
-    out += `- Lines Added: ${result.metrics.linesAdded}\n- Lines Removed: ${result.metrics.linesRemoved}\n- Files Changed: ${result.metrics.filesChanged}\n- Percentage Changed: ${result.metrics.percentageChanged}%\n`;
-  }
-  if (result.riskLevel) {
-    out += `\n## Risk Assessment\n- **Risk Level**: ${result.riskLevel.level?.toUpperCase()}\n- **Risk Score**: ${result.riskLevel.score}/10\n- **Risk Factors**:\n${(result.riskLevel.factors || []).map((f: string) => `  - ${f}`).join('\n')}`;
-  }
-  if (result.impactSummary) out += `\n\n${result.impactSummary}`;
-  if (result.diffResults) out += `\n\n## Code Diff\n\n\`\`\`diff\n${result.diffResults}\n\`\`\``;
-  if (result.qa && result.qa.length > 0) {
-    out += '\n## Q&A\n' + result.qa.map(qa => `**Q:** ${qa.question}\n**A:** ${qa.answer}`).join('\n\n');
-  }
-  return out;
+export function formatImageInsightsOutput(summary: string): string {
+  return `## Image Analysis\n\n${summary}`;
 }
 
-export function formatImageInsightsOutput(images: { name: string, summary?: string, qa?: { question: string, answer: string }[] }[]): string {
-  return images.map(img => `### ${img.name}\n${img.summary || ''}\n` + (img.qa && img.qa.length > 0 ? '\n#### Q&A\n' + img.qa.map(qa => `**Q:** ${qa.question}\n**A:** ${qa.answer}`).join('\n\n') : '')).join('\n---\n');
-}
-
-export function formatVideoSummarizerOutput(video: { name: string, summary?: string, quotes?: string[], timestamps?: string[], qa?: { question: string, answer: string }[] }): string {
-  let out = `### ${video.name}\n`;
-  if (video.summary) out += `\n**AI Summary:**\n${video.summary}\n`;
-  if (video.quotes && video.quotes.length > 0) {
-    out += '\n**Key Quotes:**\n' + video.quotes.map(q => `- "${q}"`).join('\n');
-  }
-  if (video.timestamps && video.timestamps.length > 0) {
-    out += '\n**Timestamps:**\n' + video.timestamps.map(ts => `- ${ts}`).join('\n');
-  }
-  if (video.qa && video.qa.length > 0) {
-    out += '\n**Q&A:**\n' + video.qa.map(qa => `**Q:** ${qa.question}\n**A:** ${qa.answer}`).join('\n\n');
-  }
-  return out;
+export function formatVideoSummarizerOutput(summary: string): string {
+  return `## Video Summary\n\n${summary}`;
 } 

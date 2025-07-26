@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { Code, FileText, Download, Save, X, ChevronDown, Loader2, Zap, Search, Video, TrendingUp, TestTube, Image } from 'lucide-react';
+import { Code, FileText, Download, Save, X, ChevronDown, Loader2, Zap, Search, Video, TrendingUp, TestTube, Image, Mic } from 'lucide-react';
 import { FeatureType, AppMode } from '../App';
 import { apiService, Space } from '../services/api';
 import CustomScrollbar from './CustomScrollbar';
 import { getConfluenceSpaceAndPageFromUrl } from '../utils/urlUtils';
+import VoiceRecorder from './VoiceRecorder';
 
 interface CodeAssistantProps {
   onClose: () => void;
@@ -463,11 +464,39 @@ const CodeAssistant: React.FC<CodeAssistantProps> = ({ onClose, onFeatureSelect,
                   </div>
                 </div>
 
-                {/* AI Actions */}
+                {/* AI Actions with Voice Support */}
                 <div className="mb-4">
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    AI Actions
+                  <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center">
+                    <span>AI Actions</span>
+                    <Mic className="w-4 h-4 ml-2 text-gray-500" />
                   </label>
+                  
+                  {/* Voice Recorder for AI action selection */}
+                  <div className="mb-3">
+                    <VoiceRecorder
+                      onConfirm={t => {
+                        const lowerCommand = t.toLowerCase();
+                        if (lowerCommand.includes('optimize') || lowerCommand.includes('performance')) {
+                          setAiAction('Optimize Performance');
+                        } else if (lowerCommand.includes('documentation') || lowerCommand.includes('docs') || lowerCommand.includes('comment')) {
+                          setAiAction('Generate Documentation');
+                        } else if (lowerCommand.includes('refactor') || lowerCommand.includes('structure')) {
+                          setAiAction('Refactor Structure');
+                        } else if (lowerCommand.includes('dead code') || lowerCommand.includes('unused')) {
+                          setAiAction('Identify dead code');
+                        } else if (lowerCommand.includes('logging') || lowerCommand.includes('log')) {
+                          setAiAction('Add Logging Statements');
+                        } else {
+                          setAiAction('Select action...');
+                        }
+                      }}
+                      inputPlaceholder="Say 'optimize', 'documentation', 'refactor', etc..."
+                      showInput={true}
+                      autoConfirm={false}
+                    />
+                  </div>
+                  
+                  {/* Manual dropdown selection */}
                   <div className="relative">
                     <select
                       value={aiAction}
@@ -482,15 +511,28 @@ const CodeAssistant: React.FC<CodeAssistantProps> = ({ onClose, onFeatureSelect,
                   </div>
                 </div>
 
-                {/* Instruction Input */}
+                {/* Instruction Input with Voice Support */}
                 <div className="mb-4">
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Modification Instruction
+                  <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center">
+                    <span>Modification Instruction</span>
+                    <Mic className="w-4 h-4 ml-2 text-gray-500" />
                   </label>
+                  
+                  {/* Voice Recorder for instruction input */}
+                  <div className="mb-3">
+                    <VoiceRecorder
+                      onConfirm={t => setInstruction(t)}
+                      inputPlaceholder="Speak your instruction..."
+                      showInput={true}
+                      autoConfirm={false}
+                    />
+                  </div>
+                  
+                  {/* Manual text input as backup */}
                   <textarea
                     value={instruction}
                     onChange={(e) => setInstruction(e.target.value)}
-                    placeholder="Describe the changes you want to make to the code..."
+                    placeholder="Or type your instruction here... Describe the changes you want to make to the code..."
                     className="w-full p-3 border border-white/30 rounded-lg focus:ring-2 focus:ring-confluence-blue focus:border-confluence-blue resize-none bg-white/70 backdrop-blur-sm"
                     rows={3}
                   />

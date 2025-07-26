@@ -935,26 +935,44 @@ ${outputTabs.find(tab => tab.id === 'used-tools')?.content || ''}
             <div className="max-w-4xl mx-auto">
               <div className="bg-white/60 backdrop-blur-xl rounded-xl p-8 border border-white/20 shadow-lg text-center">
                 <h3 className="text-2xl font-bold text-gray-800 mb-6">What do you want the assistant to help you achieve?</h3>
-                <div className="relative">
+                <div className="space-y-4">
                   {/* Voice Recorder integration for goal input */}
-                  <VoiceRecorder
-                    onConfirm={t => setGoal(t)}
-                    inputPlaceholder="Speak or type your goal..."
-                  />
-                  <textarea
-                    value={goal}
-                    onChange={(e) => setGoal(e.target.value)}
-                    placeholder="Describe your goal in detail... (e.g., 'Help me analyze our documentation structure and recommend improvements for better user experience')"
-                    className="w-full p-4 border-2 border-orange-200/50 rounded-xl focus:ring-2 focus:ring-orange-500 focus:border-orange-500 resize-none bg-white/70 backdrop-blur-sm text-lg"
-                    rows={4}
-                  />
-                  <button
-                    onClick={handleGoalSubmit}
-                    disabled={!goal.trim() || !selectedSpace || selectedPages.length === 0}
-                    className="absolute bottom-4 right-4 bg-orange-500/90 backdrop-blur-sm text-white p-3 rounded-lg hover:bg-orange-600 disabled:bg-gray-300 disabled:cursor-not-allowed flex items-center space-x-2 transition-colors border border-white/10"
-                  >
-                    <Send className="w-5 h-5" />
-                  </button>
+                  <div className="relative">
+                    <VoiceRecorder
+                      onConfirm={t => setGoal(t)}
+                      inputPlaceholder="Speak or type your goal..."
+                      showInput={true}
+                      autoConfirm={false}
+                    />
+                  </div>
+                  
+                  {/* Manual text input as backup */}
+                  <div className="relative">
+                    <textarea
+                      value={goal}
+                      onChange={(e) => setGoal(e.target.value)}
+                      placeholder="Or describe your goal in detail... (e.g., 'Help me analyze our documentation structure and recommend improvements for better user experience')"
+                      className="w-full p-4 border-2 border-orange-200/50 rounded-xl focus:ring-2 focus:ring-orange-500 focus:border-orange-500 resize-none bg-white/70 backdrop-blur-sm text-lg"
+                      rows={3}
+                    />
+                    <button
+                      onClick={handleGoalSubmit}
+                      disabled={!goal.trim() || !selectedSpace || selectedPages.length === 0}
+                      className="absolute bottom-4 right-4 bg-orange-500/90 backdrop-blur-sm text-white p-3 rounded-lg hover:bg-orange-600 disabled:bg-gray-300 disabled:cursor-not-allowed flex items-center space-x-2 transition-colors border border-white/10"
+                    >
+                      <Send className="w-5 h-5" />
+                    </button>
+                  </div>
+                  
+                  {/* Voice recording tips */}
+                  <div className="text-sm text-gray-600 bg-orange-50/50 backdrop-blur-sm rounded-lg p-3 border border-orange-200/30">
+                    <p className="font-medium text-orange-700 mb-1">💡 Voice Input Tips:</p>
+                    <ul className="text-left space-y-1 text-gray-600">
+                      <li>• Click the microphone button and speak clearly</li>
+                      <li>• You can also type directly in the text area</li>
+                      <li>• Both voice and text inputs work together seamlessly</li>
+                    </ul>
+                  </div>
                 </div>
                 {error && <p className="text-red-500 text-sm mt-4">{error}</p>}
               </div>
@@ -1193,6 +1211,47 @@ ${outputTabs.find(tab => tab.id === 'used-tools')?.content || ''}
                     </div>
                   </div>
                 )}
+              </div>
+            </div>
+          )}
+
+          {/* Follow-up Questions with Voice Support */}
+          {planSteps.length > 0 && !isPlanning && !isExecuting && showFollowUp && (
+            <div className="max-w-4xl mx-auto mt-8">
+              <div className="bg-white/60 backdrop-blur-xl rounded-xl p-6 border border-white/20 shadow-lg">
+                <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center">
+                  <MessageSquare className="w-5 h-5 mr-2 text-orange-500" />
+                  Ask Follow-up Questions
+                </h3>
+                <div className="space-y-4">
+                  {/* Voice Recorder for follow-up questions */}
+                  <div className="relative">
+                    <VoiceRecorder
+                      onConfirm={t => setFollowUpQuestion(t)}
+                      inputPlaceholder="Speak or type your follow-up question..."
+                      showInput={true}
+                      autoConfirm={false}
+                    />
+                  </div>
+                  
+                  {/* Manual text input for follow-up */}
+                  <div className="flex space-x-2">
+                    <input
+                      type="text"
+                      value={followUpQuestion}
+                      onChange={(e) => setFollowUpQuestion(e.target.value)}
+                      placeholder="Type your follow-up question..."
+                      className="flex-1 p-3 border border-orange-200/50 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 bg-white/70 backdrop-blur-sm"
+                    />
+                    <button
+                      onClick={handleFollowUp}
+                      disabled={!followUpQuestion.trim() || !selectedSpace || selectedPages.length === 0}
+                      className="px-6 py-3 bg-orange-500/90 text-white rounded-lg hover:bg-orange-600 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors font-semibold shadow-md border border-white/10"
+                    >
+                      <Send className="w-5 h-5" />
+                    </button>
+                  </div>
+                </div>
               </div>
             </div>
           )}

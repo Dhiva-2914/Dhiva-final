@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { Search, Download, Save, FileText, X, ChevronDown, Loader2, Settings, Video, Code, TrendingUp, TestTube, Image, CheckCircle } from 'lucide-react';
+import { Search, Download, Save, FileText, X, ChevronDown, Loader2, Settings, Video, Code, TrendingUp, TestTube, Image, CheckCircle, Mic } from 'lucide-react';
 import { FeatureType, AppMode } from '../App';
 import { apiService, Space } from '../services/api';
 import CustomScrollbar from './CustomScrollbar';
 import { getConfluenceSpaceAndPageFromUrl } from '../utils/urlUtils';
+import VoiceRecorder from './VoiceRecorder';
 
 interface AIPoweredSearchProps {
   onClose: () => void;
@@ -288,17 +289,30 @@ const AIPoweredSearch: React.FC<AIPoweredSearchProps> = ({
                     <span className="text-sm text-gray-700 font-medium">Select All Pages</span>
                 </div>
                 <div className="h-4" />
-                {/* Query Input */}
+                {/* Query Input with Voice Support */}
                 <div className="mb-4">
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Your Question
+                  <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center">
+                    <span>Your Question</span>
+                    <Mic className="w-4 h-4 ml-2 text-gray-500" />
                   </label>
+                  
+                  {/* Voice Recorder for query input */}
+                  <div className="mb-3">
+                    <VoiceRecorder
+                      onConfirm={t => setQuery(t)}
+                      inputPlaceholder="Speak your question..."
+                      showInput={true}
+                      autoConfirm={false}
+                    />
+                  </div>
+                  
+                  {/* Manual text input as backup */}
                   <textarea
                     value={query}
                     onChange={(e) => setQuery(e.target.value)}
-                    placeholder="What would you like to know about the selected content?"
+                    placeholder="Or type your question here... What would you like to know about the selected content?"
                     className="w-full p-3 border border-white/30 rounded-lg focus:ring-2 focus:ring-confluence-blue focus:border-confluence-blue resize-none bg-white/70 backdrop-blur-sm"
-                    rows={4}
+                    rows={3}
                   />
                 </div>
 

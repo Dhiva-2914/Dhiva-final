@@ -327,6 +327,14 @@ const AgentMode: React.FC<AgentModeProps> = ({ onClose, onModeSelect, autoSpaceK
           matchedPages = [selectedPages[0]];
           toolForInstruction = await determineToolByIntentAndContent(instruction, selectedSpace, selectedPages[0]);
         }
+        
+        // Fallback: If no specific tool matched but instruction is code-related, use Code Assistant
+        if (!toolForInstruction && matchedPages.length > 0) {
+          const codeRelatedKeywords = /optimize|refactor|dead\s*code|documentation|logging|convert|enhance|improve|clean|restructure|modernize|update|fix|debug|analyze\s*code|review\s*code|code\s*optimization|code\s*refactoring|generate\s*documentation|add\s*logging|code\s*conversion|code\s*enhancement|code\s*improvement|code\s*cleaning|code\s*restructuring|code\s*modernization|code\s*update|code\s*fix|code\s*debug|code\s*analysis|code\s*review/i;
+          if (codeRelatedKeywords.test(instruction)) {
+            toolForInstruction = 'code_assistant';
+          }
+        }
         // Only trigger Test Strategy if explicitly requested
         if (toolForInstruction === 'test_support' && matchedPages.length === 2 && /test\s*strategy|generate\s*test/i.test(instruction)) {
           const [codePage, testInputPage] = matchedPages;
@@ -354,12 +362,13 @@ const AgentMode: React.FC<AgentModeProps> = ({ onClose, onModeSelect, autoSpaceK
         }
         // Handle Code Assistant for code modification/enhancement tasks
         else if (toolForInstruction === 'code_assistant' && matchedPages.length >= 1) {
-          // Check if instruction is code-related
-          const codeRelatedKeywords = /optimize|refactor|dead\s*code|documentation|logging|convert|enhance|improve|clean|restructure|modernize|update|fix|debug|analyze\s*code|review\s*code/i;
+          // Check if instruction is code-related - expanded keywords for better detection
+          const codeRelatedKeywords = /optimize|refactor|dead\s*code|documentation|logging|convert|enhance|improve|clean|restructure|modernize|update|fix|debug|analyze\s*code|review\s*code|code\s*optimization|code\s*refactoring|generate\s*documentation|add\s*logging|code\s*conversion|code\s*enhancement|code\s*improvement|code\s*cleaning|code\s*restructuring|code\s*modernization|code\s*update|code\s*fix|code\s*debug|code\s*analysis|code\s*review/i;
           if (codeRelatedKeywords.test(instruction)) {
             for (const page of matchedPages) {
               const pageType = pageTypeMap[page] || 'text';
-              if (pageType === 'code') {
+              // Allow Code Assistant for code pages or if instruction is explicitly code-related
+              if (pageType === 'code' || codeRelatedKeywords.test(instruction)) {
                 const relatedActions = splitRelatedActions(instruction);
                 let lastOutput = '';
                 let outputs: string[] = [];
@@ -984,8 +993,40 @@ ${outputTabs.find(tab => tab.id === 'used-tools')?.content || ''}
                                 </button>
                               ))}
                               {activeResult && activeResult.type === 'page' && (
-                                <div className="mt-4 whitespace-pre-wrap text-gray-700 border rounded p-4 bg-white/80">
-                                  {(outputTabs.find(t => t.id === 'per-page-results')?.results || []).find((r: { page: string }) => r.page === activeResult.key)?.result}
+                                <div className="mt-4">
+                                  {(outputTabs.find(t => t.id === 'per-page-results')?.results || []).find((r: { page: string }) => r.page === activeResult.key)?.result?.split('\n').map((line: string, index: number) => {
+                                    // Check if this looks like code (contains common code patterns)
+                                    const isCodeLine = /^\s*(function|class|import|export|const|let|var|if|for|while|switch|try|catch|return|console|def|class|import|from|export|public|private|protected|static|final|abstract|interface|enum|namespace|using|namespace|#include|#define|#ifdef|#endif|package|import|public|class|interface|enum|static|final|abstract|extends|implements|throws|catch|finally|synchronized|volatile|transient|native|strictfp|assert|break|continue|do|else|for|if|instanceof|new|return|switch|throw|try|while|case|default|enum|extends|implements|import|package|super|this|boolean|byte|char|double|float|int|long|short|void|null|true|false|String|Integer|Double|Float|Boolean|Long|Short|Byte|Character|Object|Array|List|Map|Set|Queue|Stack|Vector|ArrayList|LinkedList|HashMap|TreeMap|HashSet|TreeSet|PriorityQueue|Stack|Vector|StringBuilder|StringBuffer|Calendar|Date|SimpleDateFormat|Random|Math|System|Thread|Runnable|Callable|Future|Executor|ExecutorService|ThreadPoolExecutor|ScheduledExecutorService|CompletableFuture|Optional|Stream|Collectors|Arrays|Collections|Objects|Files|Paths|Path|File|InputStream|OutputStream|Reader|Writer|BufferedReader|BufferedWriter|FileReader|FileWriter|InputStreamReader|OutputStreamWriter|DataInputStream|DataOutputStream|ObjectInputStream|ObjectOutputStream|Serializable|Cloneable|Comparable|Comparator|Iterable|Iterator|ListIterator|Spliterator|Consumer|Function|Predicate|Supplier|BiConsumer|BiFunction|BiPredicate|UnaryOperator|BinaryOperator|Collector|OptionalDouble|OptionalInt|OptionalLong|IntStream|LongStream|DoubleStream|StreamSupport|Collectors|Arrays|Collections|Objects|Files|Paths|Path|File|InputStream|OutputStream|Reader|Writer|BufferedReader|BufferedWriter|FileReader|FileWriter|InputStreamReader|OutputStreamWriter|DataInputStream|DataOutputStream|ObjectInputStream|ObjectOutputStream|Serializable|Cloneable|Comparable|Comparator|Iterable|Iterator|ListIterator|Spliterator|Consumer|Function|Predicate|Supplier|BiConsumer|BiFunction|BiPredicate|UnaryOperator|BinaryOperator|Collector|OptionalDouble|OptionalInt|OptionalLong|IntStream|LongStream|DoubleStream|StreamSupport)/.test(line) || 
+                                      /[{}();=<>+\-*/%&|!~^]/.test(line) || 
+                                      /^\s*[a-zA-Z_$][a-zA-Z0-9_$]*\s*[=:]\s*/.test(line) ||
+                                      /^\s*</.test(line) ||
+                                      /^\s*\/\//.test(line) ||
+                                      /^\s*\/\*/.test(line) ||
+                                      /^\s*\*/.test(line) ||
+                                      /^\s*\*\/\s*$/.test(line) ||
+                                      /^\s*#/.test(line) ||
+                                      /^\s*<!--/.test(line) ||
+                                      /^\s*-->/.test(line) ||
+                                      /^\s*<[a-zA-Z]/.test(line) ||
+                                      /^\s*<\/[a-zA-Z]/.test(line) ||
+                                      /^\s*[a-zA-Z_$][a-zA-Z0-9_$]*\s*\(/.test(line) ||
+                                      /^\s*}\s*$/.test(line) ||
+                                      /^\s*{\s*$/.test(line);
+                                    
+                                    if (isCodeLine) {
+                                      return (
+                                        <pre key={index} className="bg-gray-100 border border-gray-300 rounded p-3 text-sm font-mono text-gray-800 overflow-x-auto">
+                                          <code>{line}</code>
+                                        </pre>
+                                      );
+                                    } else {
+                                      return (
+                                        <div key={index} className="whitespace-pre-wrap text-gray-700 mb-1">
+                                          {line}
+                                        </div>
+                                      );
+                                    }
+                                  })}
                                 </div>
                               )}
                             </div>

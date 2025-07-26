@@ -35,7 +35,7 @@ const determineToolByIntentAndContent = async (goal: string, space: string, page
   // Intent-based routing
   if (/impact|change|difference|diff/.test(lowerGoal)) return 'impact_analyzer';
   if (/test|qa|test case|unit test/.test(lowerGoal)) return 'test_support';
-  if (/convert|debug|refactor|fix|bug|error/.test(lowerGoal)) return 'code_assistant';
+  if (/convert|debug|refactor|fix|bug|error|optimize|performance|documentation|docs|comment|dead code|unused|logging|log|summarize|summary/.test(lowerGoal)) return 'code_assistant';
   if (/video|summarize.*video|transcribe/.test(lowerGoal)) return 'video_summarizer';
   if (/image|chart|diagram|visual/.test(lowerGoal)) return 'image_insights';
   // Default
@@ -54,11 +54,11 @@ const codeAiActionPromptMap = (code: string): { [key: string]: string } => ({
 
 // Helper to split user input into actionable instructions
 function splitInstructions(input: string): string[] {
-  // Simple split on ' and ', ' then ', or newlines; can be improved with NLP
+  // Split on common instruction separators
   return input
-    .split(/\band\b|\bthen\b|\n|\r|\r\n|\.|;/i)
+    .split(/\band\b|\bthen\b|\n|\r|\r\n|\.|;|,|\|\||\|\s/i)
     .map(instr => instr.trim())
-    .filter(instr => instr.length > 0);
+    .filter(instr => instr.length > 0 && instr.length > 3); // Filter out very short fragments
 }
 
 // Helper to split a single instruction with multiple related actions (e.g., 'optimize and convert')
@@ -868,20 +868,47 @@ ${outputTabs.find(tab => tab.id === 'used-tools')?.content || ''}
                         <div className="prose prose-sm max-w-none">
                           {activeTab === 'per-page-results' ? (
                             <div>
-                              {(outputTabs.find(t => t.id === 'per-page-results')?.results || []).map((r: { page: string, results: Array<{ instruction: string, tool: string, outputs: string[], formattedOutput: string }> }) => (
-                                <div key={r.page} className="mb-6">
-                                  <h3 className="text-xl font-bold text-gray-800 mb-4">{r.page}</h3>
-                                  {(r.results || []).map((result, index) => (
-                                    <div key={index} className="bg-white/80 backdrop-blur-sm rounded-lg p-4 border border-white/20 mb-4">
-                                      <h4 className="text-lg font-semibold text-gray-800 mb-2">Instruction {index + 1}: "{result.instruction}"</h4>
-                                      <p className="text-sm text-gray-700 mb-2">Tool: {result.tool}</p>
-                                      <div className="whitespace-pre-wrap text-gray-700 border rounded p-4 bg-white/80">
-                                        {result.formattedOutput}
+                              {/* Page Buttons */}
+                              <div className="mb-6">
+                                {(outputTabs.find(t => t.id === 'per-page-results')?.results || []).map((r: { page: string, results: Array<{ instruction: string, tool: string, outputs: string[], formattedOutput: string }> }) => (
+                                  <button
+                                    key={r.page}
+                                    onClick={() => setActiveResult(activeResult && activeResult.key === r.page ? null : { type: 'page', key: r.page })}
+                                    className={`px-4 py-2 m-1 rounded transition-colors ${
+                                      activeResult && activeResult.key === r.page 
+                                        ? 'bg-orange-500 text-white shadow-lg' 
+                                        : 'bg-gray-200 text-gray-800 hover:bg-gray-300'
+                                    }`}
+                                  >
+                                    {r.page}
+                                  </button>
+                                ))}
+                              </div>
+                              
+                              {/* Page Results */}
+                              {activeResult && activeResult.type === 'page' && (
+                                <div className="mt-4">
+                                  {(() => {
+                                    const pageData = (outputTabs.find(t => t.id === 'per-page-results')?.results || []).find((r: { page: string, results: Array<{ instruction: string, tool: string, outputs: string[], formattedOutput: string }> }) => r.page === activeResult.key);
+                                    if (!pageData) return null;
+                                    
+                                    return (
+                                      <div>
+                                        <h3 className="text-xl font-bold text-gray-800 mb-4">{pageData.page}</h3>
+                                        {(pageData.results || []).map((result: { instruction: string, tool: string, outputs: string[], formattedOutput: string }, index: number) => (
+                                          <div key={index} className="bg-white/80 backdrop-blur-sm rounded-lg p-4 border border-white/20 mb-4">
+                                            <h4 className="text-lg font-semibold text-gray-800 mb-2">Instruction {index + 1}: "{result.instruction}"</h4>
+                                            <p className="text-sm text-gray-700 mb-2">Tool: {result.tool}</p>
+                                            <div className="whitespace-pre-wrap text-gray-700 border rounded p-4 bg-white/80">
+                                              {result.formattedOutput}
+                                            </div>
+                                          </div>
+                                        ))}
                                       </div>
-                                    </div>
-                                  ))}
+                                    );
+                                  })()}
                                 </div>
-                              ))}
+                              )}
                             </div>
                           ) : (
                             <div className="whitespace-pre-wrap text-gray-700">

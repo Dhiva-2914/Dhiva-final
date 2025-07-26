@@ -77,6 +77,15 @@ interface OutputTabWithResults extends OutputTab {
   results?: Array<any>;
 }
 
+interface HistoryEntry {
+  id: string;
+  goal: string;
+  timestamp: Date;
+  outputTabs: OutputTabWithResults[];
+  selectedSpace: string;
+  selectedPages: string[];
+}
+
 // Add helper to render Impact Analyzer output in the reference image style
 interface MetricsType {
   linesAdded?: number;
@@ -189,6 +198,11 @@ const AgentMode: React.FC<AgentModeProps> = ({ onClose, onModeSelect, autoSpaceK
   const [progressPercent, setProgressPercent] = useState(0);
   const [activeResult, setActiveResult] = useState<{ type: string, key: string } | null>(null);
 
+  // History state variables
+  const [history, setHistory] = useState<HistoryEntry[]>([]);
+  const [showHistory, setShowHistory] = useState(false);
+  const [currentHistoryId, setCurrentHistoryId] = useState<string | null>(null);
+
   // Auto-detect and auto-select space and page if only one exists, or from URL if provided
   useEffect(() => {
     const loadSpacesAndPages = async () => {
@@ -288,6 +302,8 @@ const AgentMode: React.FC<AgentModeProps> = ({ onClose, onModeSelect, autoSpaceK
     setCurrentStep(0);
     setActiveTab('final-answer');
     setProgressPercent(0);
+    setCurrentHistoryId(null);
+    setShowHistory(false);
     let reasoningLines: string[] = [];
     let impactAnalyzerResult: React.ReactNode | null = null;
     let testStrategyResult: React.ReactNode | null = null;
@@ -618,6 +634,9 @@ The AI assistant analyzed your request and automatically selected the most appro
       setOutputTabs(tabs);
       setActiveTab(pageTabs.length > 0 ? 'per-page-results' : 'reasoning');
       setActiveResult(null);
+      
+      // Add to history
+      addToHistory(goal, tabs);
     } catch (err: any) {
       setError(err.message || 'An error occurred during orchestration.');
     }
@@ -825,6 +844,47 @@ ${outputTabs.find(tab => tab.id === 'used-tools')?.content || ''}
     setError('');
     setProgressPercent(0);
     setActiveResult(null);
+    setCurrentHistoryId(null);
+    setShowHistory(false);
+  };
+
+  // History management functions
+  const addToHistory = (goal: string, outputTabs: OutputTabWithResults[]) => {
+    const historyEntry: HistoryEntry = {
+      id: Date.now().toString(),
+      goal,
+      timestamp: new Date(),
+      outputTabs,
+      selectedSpace,
+      selectedPages: [...selectedPages]
+    };
+    setHistory(prev => [historyEntry, ...prev]);
+  };
+
+  const loadHistoryEntry = (historyId: string) => {
+    const entry = history.find(h => h.id === historyId);
+    if (entry) {
+      setOutputTabs(entry.outputTabs);
+      setSelectedSpace(entry.selectedSpace);
+      setSelectedPages(entry.selectedPages);
+      setGoal(entry.goal);
+      setCurrentHistoryId(historyId);
+      setActiveTab(entry.outputTabs.length > 0 ? entry.outputTabs[0].id : 'answer');
+      setPlanSteps([]);
+      setCurrentStep(0);
+      setProgressPercent(100);
+      setActiveResult(null);
+    }
+  };
+
+  const goToLatest = () => {
+    if (history.length > 0) {
+      loadHistoryEntry(history[0].id);
+    }
+  };
+
+  const toggleHistory = () => {
+    setShowHistory(!showHistory);
   };
 
   return (
@@ -965,6 +1025,86 @@ ${outputTabs.find(tab => tab.id === 'used-tools')?.content || ''}
                   </div>
                 </div>
                 {error && <p className="text-red-500 text-sm mt-4">{error}</p>}
+              </div>
+            </div>
+          )}
+
+          {/* History Section */}
+          {history.length > 0 && !planSteps.length && !isPlanning && (
+            <div className="max-w-4xl mx-auto mt-6">
+              <div className="bg-white/60 backdrop-blur-xl rounded-xl p-6 border border-white/20 shadow-lg">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-lg font-semibold text-gray-800 flex items-center">
+                    <FileText className="w-5 h-5 mr-2 text-orange-500" />
+                    Previous Instructions ({history.length})
+                  </h3>
+                  <div className="flex space-x-2">
+                    <button
+                      onClick={goToLatest}
+                      className="px-3 py-1 bg-orange-500/90 text-white rounded-lg hover:bg-orange-600 transition-colors text-sm font-medium"
+                    >
+                      Go to Latest
+                    </button>
+                    <button
+                      onClick={toggleHistory}
+                      className="px-3 py-1 bg-gray-500/90 text-white rounded-lg hover:bg-gray-600 transition-colors text-sm font-medium"
+                    >
+                      {showHistory ? 'Hide' : 'Show'} History
+                    </button>
+                  </div>
+                </div>
+                
+                {showHistory && (
+                  <div className="space-y-2 max-h-60 overflow-y-auto">
+                    {history.map((entry) => (
+                      <div
+                        key={entry.id}
+                        onClick={() => loadHistoryEntry(entry.id)}
+                        className={`p-3 rounded-lg cursor-pointer transition-colors border ${
+                          currentHistoryId === entry.id
+                            ? 'bg-orange-100/80 border-orange-300 text-orange-800'
+                            : 'bg-white/50 border-white/30 hover:bg-white/70 text-gray-700'
+                        }`}
+                      >
+                        <div className="flex items-start justify-between">
+                          <div className="flex-1">
+                            <div className="font-medium text-sm mb-1 line-clamp-2">
+                              {entry.goal.length > 100 ? `${entry.goal.substring(0, 100)}...` : entry.goal}
+                            </div>
+                            <div className="text-xs text-gray-500">
+                              {entry.selectedPages.join(', ')} • {entry.timestamp.toLocaleString()}
+                            </div>
+                          </div>
+                          {currentHistoryId === entry.id && (
+                            <div className="ml-2 text-orange-600">
+                              <CheckCircle className="w-4 h-4" />
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Historical Entry Banner */}
+          {currentHistoryId && !planSteps.length && (
+            <div className="max-w-4xl mx-auto mb-6">
+              <div className="bg-orange-100/80 backdrop-blur-xl rounded-xl p-4 border border-orange-200/50 shadow-lg">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-2">
+                    <FileText className="w-5 h-5 text-orange-600" />
+                    <span className="text-orange-800 font-medium">Viewing Previous Instruction</span>
+                  </div>
+                  <button
+                    onClick={goToLatest}
+                    className="px-3 py-1 bg-orange-500/90 text-white rounded-lg hover:bg-orange-600 transition-colors text-sm font-medium"
+                  >
+                    Go to Latest
+                  </button>
+                </div>
               </div>
             </div>
           )}

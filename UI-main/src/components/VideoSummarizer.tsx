@@ -432,6 +432,28 @@ ${video.qa?.map(qa => `**Q:** ${qa.question}\n**A:** ${qa.answer}`).join('\n\n')
                           ))
                         )}
                       </div>
+                      
+                      {/* Select All / Clear All Buttons */}
+                      {pages.length > 0 && (
+                        <div className="flex items-center justify-between mt-3 pt-3 border-t border-white/20">
+                          <button
+                            onClick={selectAllPages}
+                            className="text-sm text-confluence-blue hover:text-confluence-light-blue transition-colors"
+                          >
+                            Select All
+                          </button>
+                          <button
+                            onClick={clearAllPages}
+                            className="text-sm text-gray-500 hover:text-gray-700 transition-colors"
+                          >
+                            Clear All
+                          </button>
+                        </div>
+                      )}
+                      
+                      <p className="text-sm text-gray-500 mt-2">
+                        {selectedPages.length} page(s) selected
+                      </p>
                     </div>
                   )}
                 </div>

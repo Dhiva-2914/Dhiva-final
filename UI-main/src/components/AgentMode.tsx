@@ -3,7 +3,6 @@ import { Zap, X, Send, Download, RotateCcw, FileText, Brain, CheckCircle, Loader
 import type { AppMode } from '../App';
 import { apiService, analyzeGoal, getPagesWithType, PageWithType } from '../services/api';
 import { getConfluenceSpaceAndPageFromUrl } from '../utils/urlUtils';
-// Fix import for toolOutputFormatters
 import { formatAIPoweredSearchOutput, formatCodeAssistantOutput, formatTestSupportOutput, formatImpactAnalyzerOutput, formatImageInsightsOutput, formatVideoSummarizerOutput } from '../utils/toolOutputFormatters';
 
 interface AgentModeProps {
@@ -292,84 +291,153 @@ const AgentMode: React.FC<AgentModeProps> = ({ onClose, onModeSelect, autoSpaceK
     try {
       setPlanSteps((steps) => steps.map((s) => s.id === 1 ? { ...s, status: 'running' } : s));
       setCurrentStep(0);
+      // Split instructions
+      const instructions = splitInstructions(goal);
+      // Map each instruction to the correct page/tool based on content type and intent
+      const impactResults: Array<{ page: string, result: string, riskRating?: number, riskDiff?: number, metrics?: MetricsType, riskLevel?: string }> = [];
+      const testStrategyResults: Array<{ strategy: string }> = [];
+      const pageResults: Record<string, { tool: string, outputs: string[], formattedOutput: string }> = {};
+      let optimizedCodeByPage: Record<string, string> = {};
+      let toolsTriggered: string[] = [];
+      let whyUsed: string[] = [];
+      let howDerived: string[] = [];
       
-      // Determine the appropriate tool based on user instruction
-      const lowerGoal = goal.toLowerCase();
-      let toolToUse = 'ai_powered_search'; // default
-      
-      if (/impact|change|difference|diff|compare/i.test(lowerGoal)) {
-        toolToUse = 'impact_analyzer';
-      } else if (/test|qa|test case|unit test|strategy/i.test(lowerGoal)) {
-        toolToUse = 'test_support';
-      } else if (/convert|debug|refactor|fix|bug|error|optimize|code|programming/i.test(lowerGoal)) {
-        toolToUse = 'code_assistant';
-      } else if (/video|summarize.*video|transcribe/i.test(lowerGoal)) {
-        toolToUse = 'video_summarizer';
-      } else if (/image|chart|diagram|visual|picture/i.test(lowerGoal)) {
-        toolToUse = 'image_insights';
-      }
-      
-      // Process each selected page with the determined tool
-      const results: Array<{ page: string, tool: string, output: string, formattedOutput: string }> = [];
-      
-      for (const page of selectedPages) {
-        let output = '';
-        let formattedOutput = '';
+      for (let i = 0; i < instructions.length; i++) {
+        const instruction = instructions[i];
+        const pageTypeMap: Record<string, string> = {};
+        for (const p of pageTypes) {
+          pageTypeMap[p.title] = p.content_type;
+        }
+        let matchedPages: string[] = [];
+        let toolForInstruction = '';
         
-        try {
-          if (toolToUse === 'ai_powered_search') {
-            const res = await apiService.search({ 
-              space_key: selectedSpace, 
-              page_titles: [page], 
-              query: goal 
-            });
+        // Enhanced tool selection logic based on natural language
+        const lowerInstruction = instruction.toLowerCase();
+        
+        // Determine tool based on instruction content
+        if (/impact|change|difference|diff|compare/i.test(lowerInstruction)) {
+          toolForInstruction = 'impact_analyzer';
+        } else if (/test|qa|test case|unit test|test strategy/i.test(lowerInstruction)) {
+          toolForInstruction = 'test_support';
+        } else if (/convert|debug|refactor|fix|bug|error|optimize|performance|documentation|comment|dead code|logging/i.test(lowerInstruction)) {
+          toolForInstruction = 'code_assistant';
+        } else if (/video|summarize.*video|transcribe/i.test(lowerInstruction)) {
+          toolForInstruction = 'video_summarizer';
+        } else if (/image|chart|diagram|visual|insight/i.test(lowerInstruction)) {
+          toolForInstruction = 'image_insights';
+        } else {
+          // Default to AI powered search for text summary and general queries
+          toolForInstruction = 'ai_powered_search';
+        }
+        
+        // Match pages based on tool and content type
+        for (const page of selectedPages) {
+          const type = pageTypeMap[page] || 'text';
+          if (
+            (toolForInstruction === 'code_assistant' && type === 'code') ||
+            (toolForInstruction === 'video_summarizer' && type === 'video') ||
+            (toolForInstruction === 'image_insights' && type === 'image') ||
+            (toolForInstruction === 'ai_powered_search' && type === 'text') ||
+            (toolForInstruction === 'impact_analyzer' && type === 'code') ||
+            (toolForInstruction === 'test_support' && type === 'code')
+          ) {
+            matchedPages.push(page);
+          }
+        }
+        
+        // If no specific matches, use all selected pages
+        if (!matchedPages.length && selectedPages.length > 0) {
+          matchedPages = selectedPages;
+        }
+        
+        // Process each matched page with the determined tool
+        for (const page of matchedPages) {
+          let output = '';
+          let toolLabel = '';
+          let formattedOutput = '';
+          
+          if (toolForInstruction === 'ai_powered_search') {
+            const res = await apiService.search({ space_key: selectedSpace, page_titles: [page], query: instruction });
             output = res.response;
             formattedOutput = formatAIPoweredSearchOutput(output);
-          } else if (toolToUse === 'code_assistant') {
-            const res = await apiService.codeAssistant({
+            toolLabel = 'AI Powered Search';
+            toolsTriggered.push('AI Powered Search');
+            whyUsed.push('AI Powered Search was used for text summary and analysis.');
+            howDerived.push('The response was generated by analyzing the page content using AI-powered search.');
+            
+          } else if (toolForInstruction === 'code_assistant') {
+            const relatedActions = splitRelatedActions(instruction);
+            let aiActionOutput = '';
+            let conversionOutput = '';
+            let modificationOutput = '';
+            
+            // Get the original code first
+            const initialResult = await apiService.codeAssistant({
               space_key: selectedSpace,
               page_title: page,
-              instruction: goal
+              instruction: ''
             });
-            output = res.modified_code || res.converted_code || res.original_code || 'Code processing completed.';
-            formattedOutput = formatCodeAssistantOutput([output]);
-          } else if (toolToUse === 'test_support') {
-            const res = await apiService.testSupport({ 
-              space_key: selectedSpace, 
-              code_page_title: page, 
-              question: goal 
-            });
-            output = res.test_strategy || res.ai_response || '';
-            formattedOutput = formatTestSupportOutput(output);
-          } else if (toolToUse === 'impact_analyzer') {
-            // For impact analyzer, we need two pages
-            if (selectedPages.length >= 2) {
-              const [page1, page2] = selectedPages;
-              const res = await apiService.impactAnalyzer({ 
-                space_key: selectedSpace, 
-                old_page_title: page1, 
-                new_page_title: page2, 
-                question: goal 
+            const detectedCode = initialResult.original_code || '';
+
+            // Use the exact same action prompt mapping as Tool Mode Code Assistant
+            const actionPromptMap: Record<string, string> = {
+              "Summarize Code": `Summarize the following code in clear and concise language:\n\n${detectedCode}`,
+              "Optimize Performance": `Optimize the following code for performance without changing its functionality, return only the updated code:\n\n${detectedCode}`,
+              "Generate Documentation": `Generate inline documentation and function-level comments for the following code, return only the updated code by commenting the each line of the code.:\n\n${detectedCode}`,
+              "Refactor Structure": `Refactor the following code to improve structure, readability, and modularity, return only the updated code:\n\n${detectedCode}`,
+              "Identify dead code": `Analyze the following code for any unsued code or dead code, return only the updated code by removing the dead code:\n\n${detectedCode}`,
+              "Add Logging Statements": `Add appropriate logging statements to the following code for better traceability and debugging. Return only the updated code:\n\n${detectedCode}`,
+            };
+
+            for (const action of relatedActions) {
+              // Map action to the exact same prompts used in Tool Mode
+              let prompt = action;
+              if (/optimize|performance/i.test(action)) {
+                prompt = actionPromptMap["Optimize Performance"];
+              } else if (/documentation|docs|comment/i.test(action)) {
+                prompt = actionPromptMap["Generate Documentation"];
+              } else if (/refactor|structure/i.test(action)) {
+                prompt = actionPromptMap["Refactor Structure"];
+              } else if (/dead code|unused/i.test(action)) {
+                prompt = actionPromptMap["Identify dead code"];
+              } else if (/logging|log/i.test(action)) {
+                prompt = actionPromptMap["Add Logging Statements"];
+              } else if (/summarize|summary/i.test(action)) {
+                prompt = actionPromptMap["Summarize Code"];
+              }
+
+              const result = await apiService.codeAssistant({
+                space_key: selectedSpace,
+                page_title: page,
+                instruction: prompt
               });
-              output = res.impact_analysis;
-              formattedOutput = formatImpactAnalyzerOutput({
-                impact_analysis: output,
-                risk_score: res.risk_score,
-                risk_level: res.risk_level,
-                lines_added: res.lines_added,
-                lines_removed: res.lines_removed,
-                files_changed: res.files_changed,
-                percentage_change: res.percentage_change
-              });
-            } else {
-              output = 'Impact analysis requires at least two pages to compare.';
-              formattedOutput = output;
+              
+              const actionOutput = result.modified_code || result.converted_code || result.original_code || 'AI action completed successfully.';
+              
+              // Determine output type based on action content (same logic as Tool Mode)
+              if (/optimize|refactor|dead code|docs|logging|summarize/i.test(action)) {
+                aiActionOutput = actionOutput;
+              } else if (/convert|language|to\s+\w+/i.test(action)) {
+                conversionOutput = actionOutput;
+              } else {
+                modificationOutput = actionOutput;
+              }
             }
-          } else if (toolToUse === 'video_summarizer') {
-            const res = await apiService.videoSummarizer({ 
-              space_key: selectedSpace, 
-              page_title: page 
-            });
+            
+            // Store results in the same format as Tool Mode Code Assistant
+            const outputs: string[] = [];
+            if (aiActionOutput) outputs.push(`AI Action Output:\n${aiActionOutput}`);
+            if (conversionOutput) outputs.push(`Target Language Conversion Output:\n${conversionOutput}`);
+            if (modificationOutput) outputs.push(`Modification Output:\n${modificationOutput}`);
+            
+            formattedOutput = formatCodeAssistantOutput(outputs);
+            toolLabel = 'Code Assistant';
+            toolsTriggered.push('Code Assistant');
+            whyUsed.push('Code Assistant was used for code modifications and AI actions.');
+            howDerived.push('The code was processed using AI-powered code analysis and modification tools.');
+            
+          } else if (toolForInstruction === 'video_summarizer') {
+            const res = await apiService.videoSummarizer({ space_key: selectedSpace, page_title: page });
             if (res.timestamps && Array.isArray(res.timestamps) && res.timestamps.length > 0) {
               output = res.timestamps.map((ts: string, idx: number) => {
                 let point = Array.isArray(res.summary) ? res.summary[idx] : (typeof res.summary === 'string' ? res.summary.split(/\n|\r|\r\n/)[idx] : '');
@@ -378,38 +446,106 @@ const AgentMode: React.FC<AgentModeProps> = ({ onClose, onModeSelect, autoSpaceK
             } else {
               output = 'No timestamped summary available.';
             }
-            formattedOutput = formatVideoSummarizerOutput(output);
-          } else if (toolToUse === 'image_insights') {
+            formattedOutput = formatVideoSummarizerOutput({
+              name: page,
+              summary: output,
+              timestamps: res.timestamps || [],
+              quotes: res.quotes || []
+            });
+            toolLabel = 'Video Summarizer';
+            toolsTriggered.push('Video Summarizer');
+            whyUsed.push('Video Summarizer was used for video analysis and summarization.');
+            howDerived.push('The video was analyzed and summarized using AI-powered video processing.');
+            
+          } else if (toolForInstruction === 'test_support') {
+            const res = await apiService.testSupport({ space_key: selectedSpace, code_page_title: page });
+            output = res.test_strategy || res.ai_response || '';
+            formattedOutput = formatTestSupportOutput({
+              strategy: output,
+              crossPlatform: res.cross_platform_testing || '',
+              sensitivity: res.sensitivity_analysis || '',
+              qa: []
+            });
+            toolLabel = 'Test Support';
+            toolsTriggered.push('Test Support');
+            whyUsed.push('Test Support was used for test strategy generation.');
+            howDerived.push('The test strategy was generated by analyzing the code using AI-powered testing tools.');
+            
+          } else if (toolForInstruction === 'image_insights') {
             const images = await apiService.getImages(selectedSpace, page);
             if (images && images.images && images.images.length > 0) {
-              const summaries = await Promise.all(images.images.map((imgUrl: string) => 
-                apiService.imageSummary({ 
-                  space_key: selectedSpace, 
-                  page_title: page, 
-                  image_url: imgUrl 
-                })
-              ));
+              const summaries = await Promise.all(images.images.map((imgUrl: string) => apiService.imageSummary({ space_key: selectedSpace, page_title: page, image_url: imgUrl })));
               output = summaries.map((s, i) => `Image ${i + 1}: ${s.summary}`).join('\n');
+              formattedOutput = formatImageInsightsOutput(
+                summaries.map((s, i) => ({
+                  name: `Image ${i + 1}`,
+                  summary: s.summary,
+                  qa: []
+                }))
+              );
             } else {
               output = 'No images found on this page.';
+              formattedOutput = 'No images found on this page.';
             }
-            formattedOutput = formatImageInsightsOutput(output);
+            toolLabel = 'Image Insights';
+            toolsTriggered.push('Image Insights');
+            whyUsed.push('Image Insights was used for image analysis and insights.');
+            howDerived.push('The images were analyzed using AI-powered image recognition and analysis.');
+            
+          } else if (toolForInstruction === 'impact_analyzer') {
+            // For impact analyzer, we need two pages to compare
+            if (matchedPages.length >= 2) {
+              const [page1, page2] = matchedPages.slice(0, 2);
+              const res = await apiService.impactAnalyzer({ space_key: selectedSpace, old_page_title: page1, new_page_title: page2, question: instruction });
+              let riskRating = res.risk_score || 0;
+              let riskDiff = res.percentage_change || 0;
+              impactResults.push({ 
+                page: `${page1} vs ${page2}`, 
+                result: res.impact_analysis, 
+                riskRating, 
+                riskDiff, 
+                metrics: {
+                  linesAdded: res.lines_added,
+                  linesRemoved: res.lines_removed,
+                  filesChanged: res.files_changed,
+                  percentageChanged: res.percentage_change,
+                }, 
+                riskLevel: res.risk_level 
+              });
+              toolsTriggered.push('Impact Analyzer');
+              whyUsed.push('Impact Analyzer was used for code impact analysis.');
+              howDerived.push('The impact analysis was performed by comparing code changes between pages.');
+            } else {
+              // Single page impact analysis
+              const res = await apiService.impactAnalyzer({ space_key: selectedSpace, old_page_title: page, new_page_title: page, question: instruction });
+              let riskRating = res.risk_score || 0;
+              let riskDiff = res.percentage_change || 0;
+              impactResults.push({ 
+                page, 
+                result: res.impact_analysis, 
+                riskRating, 
+                riskDiff,
+                metrics: {
+                  linesAdded: res.lines_added,
+                  linesRemoved: res.lines_removed,
+                  filesChanged: res.files_changed,
+                  percentageChanged: res.percentage_change,
+                },
+                riskLevel: res.risk_level
+              });
+              toolsTriggered.push('Impact Analyzer');
+              whyUsed.push('Impact Analyzer was used for code impact analysis.');
+              howDerived.push('The impact analysis was performed by analyzing the code page.');
+            }
+            continue; // Skip the regular page results for impact analyzer
           }
           
-          results.push({
-            page,
-            tool: toolToUse,
-            output,
-            formattedOutput
-          });
-          
-        } catch (err: any) {
-          results.push({
-            page,
-            tool: toolToUse,
-            output: `Error processing page: ${err.message}`,
-            formattedOutput: `Error processing page: ${err.message}`
-          });
+          // Store results with formatted output
+          if (!pageResults[page]) {
+            pageResults[page] = { tool: toolLabel, outputs: [], formattedOutput: '' };
+          }
+          pageResults[page].outputs.push(output);
+          pageResults[page].formattedOutput = formattedOutput;
         }
       }
       
@@ -421,34 +557,54 @@ const AgentMode: React.FC<AgentModeProps> = ({ onClose, onModeSelect, autoSpaceK
       setCurrentStep(2);
       setProgressPercent(100);
       
-      // Create output tabs with the actual tool results
-      const tabs = [
+      // Reasoning section: always fill with 3 lines
+      const reasoning = [
+        `Tools triggered: ${toolsTriggered.join(', ') || 'None'}.`,
+        whyUsed[0] || 'The tools were chosen based on the user instruction and content type of the uploaded pages.',
+        howDerived[0] || 'The answer was derived by applying the selected tools to the uploaded pages as per the instruction.'
+      ].join('\n');
+      
+      // Prepare output tabs for new UI
+      const impactTab = impactResults.length > 0 ? {
+        id: 'impact-analysed',
+        label: 'Impact Analysed',
+        icon: FileText,
+        content: '',
+        results: impactResults,
+      } : null;
+      
+      const testStrategyTab = testStrategyResults.length > 0 ? {
+        id: 'test-strategy',
+        label: 'Test Strategy',
+        icon: FileText,
+        content: '',
+        results: testStrategyResults,
+      } : null;
+      
+      const pageTabs = Object.keys(pageResults).length > 0 ? [
         {
-          id: 'final-answer',
-          label: 'Final Answer',
-          icon: CheckCircle,
-          content: results.map(r => `## ${r.page}\n\n**Tool Used:** ${r.tool.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}\n\n${r.formattedOutput}`).join('\n\n---\n\n'),
-        },
+          id: 'per-page-results',
+          label: 'Page Results',
+          icon: FileText,
+          content: '',
+          results: Object.entries(pageResults).map(([page, { tool, outputs, formattedOutput }]) => ({ 
+            page, 
+            tool, 
+            result: outputs.join('\n\n'),
+            formattedOutput 
+          })),
+        }
+      ] : [];
+      
+      const tabs = [
+        ...(impactTab ? [impactTab] : []),
+        ...(testStrategyTab ? [testStrategyTab] : []),
+        ...pageTabs,
         {
           id: 'reasoning',
           label: 'Reasoning',
           icon: Brain,
-          content: `## Tool Selection Reasoning
-
-**Selected Tool:** ${toolToUse.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}
-
-**Reason:** Based on your instruction "${goal}", I determined that the ${toolToUse.replace(/_/g, ' ')} tool would be most appropriate because:
-
-${toolToUse === 'ai_powered_search' ? '- Your instruction appears to be a general query or request for information' :
-  toolToUse === 'code_assistant' ? '- Your instruction involves code modification, optimization, or programming tasks' :
-  toolToUse === 'test_support' ? '- Your instruction relates to testing, test cases, or test strategy' :
-  toolToUse === 'impact_analyzer' ? '- Your instruction involves comparing changes or analyzing impact' :
-  toolToUse === 'video_summarizer' ? '- Your instruction relates to video content or summarization' :
-  toolToUse === 'image_insights' ? '- Your instruction involves images, charts, or visual content' : '- Your instruction was processed with the most suitable tool'}
-
-**Pages Processed:** ${selectedPages.join(', ')}
-
-**Results:** Each page was processed using the ${toolToUse.replace(/_/g, ' ')} tool to provide the most relevant output for your request.`,
+          content: reasoning,
         },
         {
           id: 'selected-pages',
@@ -459,10 +615,10 @@ ${toolToUse === 'ai_powered_search' ? '- Your instruction appears to be a genera
       ];
       
       setOutputTabs(tabs);
-      setActiveTab('final-answer');
+      setActiveTab(impactTab ? 'impact-analysed' : testStrategyTab ? 'test-strategy' : (pageTabs.length > 0 ? 'per-page-results' : 'reasoning'));
       setActiveResult(null);
     } catch (err: any) {
-      setError(err.message || 'An error occurred during processing.');
+      setError(err.message || 'An error occurred during orchestration.');
     } finally {
       setIsPlanning(false);
       setCurrentStep(2);
@@ -660,21 +816,16 @@ ${outputTabs.find(tab => tab.id === 'used-tools')?.content || ''}
   };
 
   const replaySteps = () => {
-    // Reset all state to return to chat interface
+    // Reset all state to go back to chat/goal input
     setPlanSteps([]);
     setCurrentStep(0);
     setOutputTabs([]);
     setShowFollowUp(false);
     setActiveTab('final-answer');
-    setGoal(''); // Reset goal
-    setSelectedPages([]); // Reset selected pages
-    setSelectedSpace(''); // Reset selected space
-    setError(''); // Clear any previous errors
-    setIsPlanning(false); // Reset planning state
-    setIsExecuting(false); // Reset executing state
-    setProgressPercent(0); // Reset progress
-    setActiveResult(null); // Reset active result
-    setFollowUpQuestion(''); // Reset follow-up question
+    setProgressPercent(0);
+    setActiveResult(null);
+    setError('');
+    // Don't call handleGoalSubmit - just reset to the initial state
   };
 
   return (
@@ -891,36 +1042,7 @@ ${outputTabs.find(tab => tab.id === 'used-tools')?.content || ''}
                     <div className="p-6">
                       {outputTabs.find(tab => tab.id === activeTab) && (
                         <div className="prose prose-sm max-w-none">
-                          {activeTab === 'final-answer' ? (
-                            <div className="whitespace-pre-wrap text-gray-700">
-                              {outputTabs.find(tab => tab.id === activeTab)?.content.split('\n').map((line, index) => {
-                                if (line.startsWith('### ')) {
-                                  return <h3 key={index} className="text-lg font-bold text-gray-800 mt-4 mb-2">{line.substring(4)}</h3>;
-                                } else if (line.startsWith('## ')) {
-                                  return <h2 key={index} className="text-xl font-bold text-gray-800 mt-6 mb-3">{line.substring(3)}</h2>;
-                                } else if (line.startsWith('# ')) {
-                                  return <h1 key={index} className="text-2xl font-bold text-gray-800 mt-8 mb-4">{line.substring(2)}</h1>;
-                                } else if (line.startsWith('- **')) {
-                                  const match = line.match(/- \*\*(.*?)\*\*: (.*)/);
-                                  if (match) {
-                                    return <p key={index} className="mb-2"><strong>{match[1]}:</strong> {match[2]}</p>;
-                                  }
-                                } else if (line.startsWith('- ')) {
-                                  return <p key={index} className="mb-1 ml-4">• {line.substring(2)}</p>;
-                                } else if (line.startsWith('```')) {
-                                  // Handle code blocks
-                                  return <div key={index} className="bg-gray-900/90 backdrop-blur-sm rounded-lg p-4 overflow-auto max-h-96 border border-white/10 my-4">
-                                    <pre className="text-sm text-gray-300">
-                                      <code>{line.substring(3)}</code>
-                                    </pre>
-                                  </div>;
-                                } else if (line.trim()) {
-                                  return <p key={index} className="mb-2 text-gray-700">{line}</p>;
-                                }
-                                return <br key={index} />;
-                              })}
-                            </div>
-                          ) : activeTab === 'impact-analysed' ? (
+                          {activeTab === 'impact-analysed' ? (
                             <div>
                               <button className="px-4 py-2 bg-orange-500 text-white rounded" onClick={() => setActiveResult(activeResult && activeResult.type === 'impact' ? null : { type: 'impact', key: outputTabs.find(t => t.id === 'impact-analysed')?.results?.[0]?.page || '' })}>
                                 Impact Analysed
@@ -964,33 +1086,35 @@ ${outputTabs.find(tab => tab.id === 'used-tools')?.content || ''}
                               ))}
                               {activeResult && activeResult.type === 'page' && (
                                 <div className="mt-4">
-                                  {(outputTabs.find(t => t.id === 'per-page-results')?.results || []).find((r: { page: string, tool: string }) => r.page === activeResult.key)?.outputs?.map((output: string, index: number) => {
-                                    // Check if this is Code Assistant output and contains code
-                                    const isCodeAssistant = (outputTabs.find(t => t.id === 'per-page-results')?.results || []).find((r: { page: string, tool: string }) => r.page === activeResult.key)?.tool === 'code_assistant';
-                                    
-                                    if (isCodeAssistant && (output.includes('AI Action Output:') || output.includes('Target Language Conversion Output:') || output.includes('Modification Output:') || output.includes('Processed Code:'))) {
-                                      const [label, ...codeLines] = output.split('\n');
-                                      const codeContent = codeLines.join('\n');
-                                      
-                                      return (
-                                        <div key={index} className="mb-4">
-                                          <div className="text-sm font-medium text-gray-600 mb-2">{label}</div>
-                                          <div className="bg-gray-900/90 backdrop-blur-sm rounded-lg p-4 overflow-auto max-h-96 border border-white/10">
+                                  {(outputTabs.find(t => t.id === 'per-page-results')?.results || []).find((r: { page: string, tool: string, formattedOutput: string }) => r.page === activeResult.key)?.formattedOutput && (
+                                    <div className="whitespace-pre-wrap text-gray-700 border rounded p-4 bg-white/80 mb-4">
+                                      {(outputTabs.find(t => t.id === 'per-page-results')?.results || []).find((r: { page: string, tool: string, formattedOutput: string }) => r.page === activeResult.key)?.formattedOutput.split('\n').map((line: string, index: number) => {
+                                        if (line.startsWith('### ')) {
+                                          return <h3 key={index} className="text-lg font-bold text-gray-800 mt-4 mb-2">{line.substring(4)}</h3>;
+                                        } else if (line.startsWith('## ')) {
+                                          return <h2 key={index} className="text-xl font-bold text-gray-800 mt-6 mb-3">{line.substring(3)}</h2>;
+                                        } else if (line.startsWith('# ')) {
+                                          return <h1 key={index} className="text-2xl font-bold text-gray-800 mt-8 mb-4">{line.substring(2)}</h1>;
+                                        } else if (line.startsWith('- **')) {
+                                          const match = line.match(/- \*\*(.*?)\*\*: (.*)/);
+                                          if (match) {
+                                            return <p key={index} className="mb-2"><strong>{match[1]}:</strong> {match[2]}</p>;
+                                          }
+                                        } else if (line.startsWith('- ')) {
+                                          return <p key={index} className="mb-1 ml-4">• {line.substring(2)}</p>;
+                                        } else if (line.startsWith('```')) {
+                                          return <div key={index} className="bg-gray-900/90 backdrop-blur-sm rounded-lg p-4 overflow-auto max-h-96 border border-white/10 my-4">
                                             <pre className="text-sm text-gray-300">
-                                              <code>{codeContent}</code>
+                                              <code>{line.substring(3)}</code>
                                             </pre>
-                                          </div>
-                                        </div>
-                                      );
-                                    } else {
-                                      // Regular text output
-                                      return (
-                                        <div key={index} className="whitespace-pre-wrap text-gray-700 border rounded p-4 bg-white/80 mb-4">
-                                          {output}
-                                        </div>
-                                      );
-                                    }
-                                  })}
+                                          </div>;
+                                        } else if (line.trim()) {
+                                          return <p key={index} className="mb-2 text-gray-700">{line}</p>;
+                                        }
+                                        return <br key={index} />;
+                                      })}
+                                    </div>
+                                  )}
                                 </div>
                               )}
                             </div>
@@ -1040,7 +1164,7 @@ ${outputTabs.find(tab => tab.id === 'used-tools')?.content || ''}
                 onClick={replaySteps}
                 className="px-6 py-3 bg-white/80 text-orange-600 rounded-lg hover:bg-orange-100 transition-colors font-semibold shadow-md border border-orange-200/50"
               >
-                <RotateCcw className="w-5 h-5 inline-block mr-2" />
+                <MessageSquare className="w-5 h-5 inline-block mr-2" />
                 Back to Chat
               </button>
             </div>

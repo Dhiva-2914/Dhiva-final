@@ -671,15 +671,15 @@ const CodeAssistant: React.FC<CodeAssistantProps> = ({ onClose, onFeatureSelect,
                       </button>
                       <button
                         onClick={async () => {
-                          const { space, page } = getConfluenceSpaceAndPageFromUrl();
-                          if (!space || !page) {
+                          const { space, pages: savedPages } = getConfluenceSpaceAndPageFromUrl();
+                          if (!space || !savedPages || savedPages.length === 0) {
                             alert('Confluence space or pages not specified in macro src URL.');
                             return;
                           }
                           try {
                             await apiService.saveToConfluence({
                               space_key: space,
-                              page_title: Array.isArray(page) ? page[0] : page, // Save to the first selected page
+                              page_title: savedPages[0], // Save to the first selected page
                               content: processedCode || '',
                             });
                             setShowToast(true);

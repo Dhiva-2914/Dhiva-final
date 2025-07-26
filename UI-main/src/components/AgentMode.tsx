@@ -360,35 +360,72 @@ const AgentMode: React.FC<AgentModeProps> = ({ onClose, onModeSelect, autoSpaceK
           let conversionOutput = '';
           let modificationOutput = '';
           
+          // Get the original code first to use in prompts (like Tool Mode does)
+          const initialResult = await apiService.codeAssistant({
+            space_key: selectedSpace,
+            page_title: matchedPages[0],
+            instruction: ''
+          });
+          const detectedCode = initialResult.original_code || '';
+
+          // Use the exact same action prompt mapping as Tool Mode Code Assistant
+          const actionPromptMap: Record<string, string> = {
+            "Summarize Code": `Summarize the following code in clear and concise language:\n\n${detectedCode}`,
+            "Optimize Performance": `Optimize the following code for performance without changing its functionality, return only the updated code:\n\n${detectedCode}`,
+            "Generate Documentation": `Generate inline documentation and function-level comments for the following code, return only the updated code by commenting the each line of the code.:\n\n${detectedCode}`,
+            "Refactor Structure": `Refactor the following code to improve structure, readability, and modularity, return only the updated code:\n\n${detectedCode}`,
+            "Identify dead code": `Analyze the following code for any unsued code or dead code, return only the updated code by removing the dead code:\n\n${detectedCode}`,
+            "Add Logging Statements": `Add appropriate logging statements to the following code for better traceability and debugging. Return only the updated code:\n\n${detectedCode}`,
+          };
+
           for (const action of relatedActions) {
+            // Map action to the exact same prompts used in Tool Mode
+            let prompt = action;
+            if (/optimize|performance/i.test(action)) {
+              prompt = actionPromptMap["Optimize Performance"];
+            } else if (/documentation|docs|comment/i.test(action)) {
+              prompt = actionPromptMap["Generate Documentation"];
+            } else if (/refactor|structure/i.test(action)) {
+              prompt = actionPromptMap["Refactor Structure"];
+            } else if (/dead code|unused/i.test(action)) {
+              prompt = actionPromptMap["Identify dead code"];
+            } else if (/logging|log/i.test(action)) {
+              prompt = actionPromptMap["Add Logging Statements"];
+            } else if (/summarize|summary/i.test(action)) {
+              prompt = actionPromptMap["Summarize Code"];
+            }
+
             const result = await apiService.codeAssistant({
               space_key: selectedSpace,
               page_title: matchedPages[0],
-              instruction: action
+              instruction: prompt
             });
             
-            // Determine output type based on action content
-            if (/optimize|refactor|dead code|docs|logging/i.test(action)) {
+            // Use the exact same output logic as Tool Mode Code Assistant
+            const output = result.modified_code || result.converted_code || result.original_code || 'AI action completed successfully.';
+            
+            // Determine output type based on action content (same logic as Tool Mode)
+            if (/optimize|refactor|dead code|docs|logging|summarize/i.test(action)) {
               // AI Action
-              aiActionOutput = result.modified_code || result.converted_code || result.original_code || 'AI action completed successfully.';
+              aiActionOutput = output;
               toolsTriggered.push('Code Assistant (AI Action)');
               whyUsed.push('Code Assistant AI Action was used to perform code optimization/refactoring as requested.');
               howDerived.push(`The AI action was applied to the code page to ${action.toLowerCase()}.`);
             } else if (/convert|language|to\s+\w+/i.test(action)) {
               // Language Conversion
-              conversionOutput = result.converted_code || result.modified_code || result.original_code || 'Language conversion completed successfully.';
+              conversionOutput = output;
               toolsTriggered.push('Code Assistant (Language Conversion)');
               whyUsed.push('Code Assistant Language Conversion was used to convert code to the target language.');
               howDerived.push(`The code was converted to the specified target language as requested.`);
             } else {
               // Modification
-              modificationOutput = result.modified_code || result.converted_code || result.original_code || 'Modification completed successfully.';
+              modificationOutput = output;
               toolsTriggered.push('Code Assistant (Modification)');
               whyUsed.push('Code Assistant Modification was used to apply the requested changes to the code.');
               howDerived.push(`The modification instruction was applied to the code page.`);
             }
             
-            lastOutput = result.modified_code || result.converted_code || result.original_code || '';
+            lastOutput = output;
           }
           
           // Store results in the same format as Tool Mode Code Assistant
@@ -988,8 +1025,34 @@ ${outputTabs.find(tab => tab.id === 'used-tools')?.content || ''}
                                 </button>
                               ))}
                               {activeResult && activeResult.type === 'page' && (
-                                <div className="mt-4 whitespace-pre-wrap text-gray-700 border rounded p-4 bg-white/80">
-                                  {(outputTabs.find(t => t.id === 'per-page-results')?.results || []).find((r: { page: string }) => r.page === activeResult.key)?.result}
+                                <div className="mt-4">
+                                  {(outputTabs.find(t => t.id === 'per-page-results')?.results || []).find((r: { page: string, tool: string }) => r.page === activeResult.key)?.outputs?.map((output: string, index: number) => {
+                                    // Check if this is Code Assistant output and contains code
+                                    const isCodeAssistant = (outputTabs.find(t => t.id === 'per-page-results')?.results || []).find((r: { page: string, tool: string }) => r.page === activeResult.key)?.tool === 'code_assistant';
+                                    
+                                    if (isCodeAssistant && (output.includes('AI Action Output:') || output.includes('Target Language Conversion Output:') || output.includes('Modification Output:') || output.includes('Processed Code:'))) {
+                                      const [label, ...codeLines] = output.split('\n');
+                                      const codeContent = codeLines.join('\n');
+                                      
+                                      return (
+                                        <div key={index} className="mb-4">
+                                          <div className="text-sm font-medium text-gray-600 mb-2">{label}</div>
+                                          <div className="bg-gray-900/90 backdrop-blur-sm rounded-lg p-4 overflow-auto max-h-96 border border-white/10">
+                                            <pre className="text-sm text-gray-300">
+                                              <code>{codeContent}</code>
+                                            </pre>
+                                          </div>
+                                        </div>
+                                      );
+                                    } else {
+                                      // Regular text output
+                                      return (
+                                        <div key={index} className="whitespace-pre-wrap text-gray-700 border rounded p-4 bg-white/80 mb-4">
+                                          {output}
+                                        </div>
+                                      );
+                                    }
+                                  })}
                                 </div>
                               )}
                             </div>

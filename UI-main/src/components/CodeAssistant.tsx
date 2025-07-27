@@ -184,7 +184,7 @@ const CodeAssistant: React.FC<CodeAssistantProps> = ({ onClose, onFeatureSelect,
         content: newCode
       });
 
-      // Run impact analysis between original and modified code
+      // Run impact analysis between original and modified code using the exact same logic as dhaya
       const result = await apiService.impactAnalyzer({
         space_key: selectedSpace,
         old_page_title: selectedPage,

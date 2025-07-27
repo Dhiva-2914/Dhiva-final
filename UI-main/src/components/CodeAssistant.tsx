@@ -53,6 +53,7 @@ const CodeAssistant: React.FC<CodeAssistantProps> = ({ onClose, onFeatureSelect,
   const [impactResults, setImpactResults] = useState<string>('');
   const [impactMetrics, setImpactMetrics] = useState<DiffMetrics | null>(null);
   const [impactSummary, setImpactSummary] = useState('');
+  const [impactRecommendations, setImpactRecommendations] = useState('');
   const [impactRiskLevel, setImpactRiskLevel] = useState<RiskLevel | null>(null);
   const [showImpactResults, setShowImpactResults] = useState(false);
 
@@ -146,6 +147,7 @@ const CodeAssistant: React.FC<CodeAssistantProps> = ({ onClose, onFeatureSelect,
       setImpactResults('');
       setImpactMetrics(null);
       setImpactSummary('');
+      setImpactRecommendations('');
       setImpactRiskLevel(null);
     } catch (err) {
       setError('Failed to load page content. Please try again.');
@@ -174,47 +176,107 @@ const CodeAssistant: React.FC<CodeAssistantProps> = ({ onClose, onFeatureSelect,
     setError('');
 
     try {
-      // Create a temporary page for the new version to compare
-      const tempPageTitle = `${selectedPage}_temp_${Date.now()}`;
+      // Create a custom impact analysis by directly comparing the codes
+      const oldLines = detectedCode.split('\n');
+      const newLines = newCode.split('\n');
       
-      // Save the new code to a temporary page for comparison
-      await apiService.saveToConfluence({
+      // Calculate basic metrics
+      const linesAdded = Math.max(0, newLines.length - oldLines.length);
+      const linesRemoved = Math.max(0, oldLines.length - newLines.length);
+      const totalLines = Math.max(oldLines.length, newLines.length);
+      const percentageChange = totalLines > 0 ? Math.round(((linesAdded + linesRemoved) / totalLines) * 100) : 0;
+      
+      // Generate a simple diff-like output
+      const diffOutput = [];
+      const maxLines = Math.max(oldLines.length, newLines.length);
+      
+      for (let i = 0; i < maxLines; i++) {
+        const oldLine = oldLines[i] || '';
+        const newLine = newLines[i] || '';
+        
+        if (oldLine !== newLine) {
+          if (oldLine) diffOutput.push(`- ${oldLine}`);
+          if (newLine) diffOutput.push(`+ ${newLine}`);
+        } else {
+          diffOutput.push(`  ${oldLine}`);
+        }
+      }
+      
+      // Use the Code Assistant API to generate impact analysis
+      const analysisPrompt = `Analyze the impact of the following code changes. Provide a detailed analysis in this exact format:
+
+## Impact Analysis
+[Describe what was changed and how it affects the codebase]
+
+## Risk Assessment
+[Identify potential risks and their severity levels]
+
+## Recommendations
+[Provide specific suggestions for improvement, testing, or deployment]
+
+Original Code:
+${detectedCode}
+
+Modified Code:
+${newCode}
+
+Please provide a structured analysis with clear sections as specified above.`;
+
+      const analysisResult = await apiService.codeAssistant({
         space_key: selectedSpace,
-        page_title: tempPageTitle,
-        content: newCode
+        page_title: selectedPage,
+        instruction: analysisPrompt
       });
 
-      // Run impact analysis between original and modified code using the exact same logic as dhaya
-      const result = await apiService.impactAnalyzer({
-        space_key: selectedSpace,
-        old_page_title: selectedPage,
-        new_page_title: tempPageTitle
-      });
+      // Calculate risk level based on percentage change
+      let riskLevel: 'low' | 'medium' | 'high' = 'low';
+      let riskScore = 1;
+      
+      if (percentageChange > 30) {
+        riskLevel = 'high';
+        riskScore = Math.min(10, Math.round(percentageChange / 10));
+      } else if (percentageChange > 10) {
+        riskLevel = 'medium';
+        riskScore = Math.min(8, Math.round(percentageChange / 8));
+      } else {
+        riskLevel = 'low';
+        riskScore = Math.min(5, Math.round(percentageChange / 5));
+      }
 
-      setImpactResults(result.diff || '');
+      // Generate risk factors based on the analysis
+      const riskFactors = [
+        `Code changes affect ${percentageChange}% of the original content`,
+        `${linesAdded} lines added, ${linesRemoved} lines removed`,
+        'Changes may impact functionality and require testing',
+        'Review recommended before deployment'
+      ];
+
+      setImpactResults(diffOutput.join('\n'));
       setImpactMetrics({
-        linesAdded: result.lines_added || 0,
-        linesRemoved: result.lines_removed || 0,
-        filesChanged: result.files_changed || 1,
-        percentageChanged: result.percentage_change || 0
+        linesAdded: linesAdded,
+        linesRemoved: linesRemoved,
+        filesChanged: 1,
+        percentageChanged: percentageChange
       });
       
-      setImpactSummary(result.impact_analysis || '');
+      const analysisText = analysisResult.modified_code || analysisResult.original_code || 'Impact analysis completed successfully.';
+      setImpactSummary(analysisText);
+      
+      // Extract recommendations if they exist in the analysis
+      const recommendationsMatch = analysisText.match(/## Recommendations\n([\s\S]*?)(?=\n##|$)/);
+      if (recommendationsMatch) {
+        setImpactRecommendations(recommendationsMatch[1].trim());
+      } else {
+        setImpactRecommendations('');
+      }
+      
       setImpactRiskLevel({
-        level: (result.risk_level || 'low') as 'low' | 'medium' | 'high',
-        score: result.risk_score || 0,
-        factors: result.risk_factors || []
+        level: riskLevel,
+        score: riskScore,
+        factors: riskFactors
       });
       
       setShowImpactResults(true);
-
-      // Clean up temporary page
-      try {
-        // Note: In a real implementation, you might want to delete the temp page
-        // For now, we'll leave it as the API doesn't have a delete endpoint
-      } catch (cleanupErr) {
-        console.warn('Failed to cleanup temporary page:', cleanupErr);
-      }
       
     } catch (err) {
       setError('Failed to analyze impact. Please try again.');
@@ -852,13 +914,18 @@ const CodeAssistant: React.FC<CodeAssistantProps> = ({ onClose, onFeatureSelect,
                   {/* Impact Summary */}
                   {impactSummary && (
                     <div>
-                      <h4 className="font-semibold text-gray-800 mb-3">AI Impact Summary</h4>
+                      <h4 className="font-semibold text-gray-800 mb-3">AI Impact Analysis</h4>
                       <div className="bg-white/70 backdrop-blur-sm rounded-lg p-4 border border-white/20 prose prose-sm max-w-none">
                         {impactSummary.split('\n').map((line, index) => {
                           if (line.startsWith('### ')) {
                             return <h3 key={index} className="text-lg font-bold text-gray-800 mt-4 mb-2">{line.substring(4)}</h3>;
                           } else if (line.startsWith('## ')) {
                             return <h2 key={index} className="text-xl font-bold text-gray-800 mt-6 mb-3">{line.substring(3)}</h2>;
+                          } else if (line.startsWith('**')) {
+                            const match = line.match(/\*\*(.*?)\*\*: (.*)/);
+                            if (match) {
+                              return <p key={index} className="mb-2"><strong>{match[1]}:</strong> {match[2]}</p>;
+                            }
                           } else if (line.startsWith('- **')) {
                             const match = line.match(/- \*\*(.*?)\*\*: (.*)/);
                             if (match) {
@@ -866,11 +933,49 @@ const CodeAssistant: React.FC<CodeAssistantProps> = ({ onClose, onFeatureSelect,
                             }
                           } else if (line.match(/^\d+\./)) {
                             return <p key={index} className="mb-2 font-medium">{line}</p>;
+                          } else if (line.startsWith('- ')) {
+                            return <p key={index} className="mb-2 text-gray-700 pl-4">• {line.substring(2)}</p>;
                           } else if (line.trim()) {
                             return <p key={index} className="mb-2 text-gray-700">{line}</p>;
                           }
                           return <br key={index} />;
                         })}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Recommendations */}
+                  {impactRecommendations && (
+                    <div>
+                      <h4 className="font-semibold text-gray-800 mb-3">Recommendations</h4>
+                      <div className="bg-green-50/80 backdrop-blur-sm rounded-lg p-4 border border-green-200/50">
+                        <div className="prose prose-sm max-w-none">
+                          {impactRecommendations.split('\n').map((line, index) => {
+                            if (line.startsWith('- ')) {
+                              return <p key={index} className="mb-2 text-green-800">• {line.substring(2)}</p>;
+                            } else if (line.trim()) {
+                              return <p key={index} className="mb-2 text-green-800">{line}</p>;
+                            }
+                            return <br key={index} />;
+                          })}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Risk Factors */}
+                  {impactRiskLevel && impactRiskLevel.factors && impactRiskLevel.factors.length > 0 && (
+                    <div>
+                      <h4 className="font-semibold text-gray-800 mb-3">Risk Factors</h4>
+                      <div className="bg-white/70 backdrop-blur-sm rounded-lg p-4 border border-white/20">
+                        <ul className="space-y-2">
+                          {impactRiskLevel.factors.map((factor, index) => (
+                            <li key={index} className="flex items-start space-x-2">
+                              <span className="text-red-500 mt-1">•</span>
+                              <span className="text-gray-700 text-sm">{factor}</span>
+                            </li>
+                          ))}
+                        </ul>
                       </div>
                     </div>
                   )}

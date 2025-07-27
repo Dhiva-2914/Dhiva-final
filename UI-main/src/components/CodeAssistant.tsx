@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Code, FileText, Download, Save, X, ChevronDown, Loader2, Zap, Search, Video, TrendingUp, TestTube, Image } from 'lucide-react';
+import { Code, FileText, Download, Save, X, ChevronDown, Loader2, Zap, Search, Video, TrendingUp, TestTube, Image, GitCompare } from 'lucide-react';
 import { FeatureType, AppMode } from '../App';
 import { apiService, Space } from '../services/api';
 import CustomScrollbar from './CustomScrollbar';
@@ -11,6 +11,19 @@ interface CodeAssistantProps {
   onModeSelect: (mode: AppMode) => void;
   autoSpaceKey?: string | null;
   isSpaceAutoConnected?: boolean;
+}
+
+interface DiffMetrics {
+  linesAdded: number;
+  linesRemoved: number;
+  filesChanged: number;
+  percentageChanged: number;
+}
+
+interface RiskLevel {
+  level: 'low' | 'medium' | 'high';
+  score: number;
+  factors: string[];
 }
 
 const CodeAssistant: React.FC<CodeAssistantProps> = ({ onClose, onFeatureSelect, onModeSelect, autoSpaceKey, isSpaceAutoConnected }) => {
@@ -34,6 +47,14 @@ const CodeAssistant: React.FC<CodeAssistantProps> = ({ onClose, onFeatureSelect,
   const [aiActionOutput, setAiActionOutput] = useState('');
   const [modificationOutput, setModificationOutput] = useState('');
   const [conversionOutput, setConversionOutput] = useState('');
+
+  // Add new state for Impact Analysis
+  const [isImpactAnalyzing, setIsImpactAnalyzing] = useState(false);
+  const [impactResults, setImpactResults] = useState<string>('');
+  const [impactMetrics, setImpactMetrics] = useState<DiffMetrics | null>(null);
+  const [impactSummary, setImpactSummary] = useState('');
+  const [impactRiskLevel, setImpactRiskLevel] = useState<RiskLevel | null>(null);
+  const [showImpactResults, setShowImpactResults] = useState(false);
 
   const features = [
     { id: 'search' as const, label: 'AI Powered Search', icon: Search },
@@ -120,12 +141,113 @@ const CodeAssistant: React.FC<CodeAssistantProps> = ({ onClose, onFeatureSelect,
       setDetectedCode(result.original_code);
       setSummary(result.summary);
       setProcessedCode('');
+      // Reset impact analysis results when page changes
+      setShowImpactResults(false);
+      setImpactResults('');
+      setImpactMetrics(null);
+      setImpactSummary('');
+      setImpactRiskLevel(null);
     } catch (err) {
       setError('Failed to load page content. Please try again.');
       console.error('Error loading page:', err);
     } finally {
       setIsProcessing(false);
     }
+  };
+
+  // Add impact analysis function
+  const analyzeImpact = async () => {
+    if (!selectedSpace || !selectedPage || !detectedCode) {
+      setError('Please select a space and page with code content.');
+      return;
+    }
+
+    // Get the current modified code (prioritize the most recent output)
+    const newCode = aiActionOutput || modificationOutput || conversionOutput || processedCode;
+    
+    if (!newCode || newCode === detectedCode) {
+      setError('No changes detected to analyze impact.');
+      return;
+    }
+
+    setIsImpactAnalyzing(true);
+    setError('');
+
+    try {
+      // Create a temporary page for the new version to compare
+      const tempPageTitle = `${selectedPage}_temp_${Date.now()}`;
+      
+      // Save the new code to a temporary page for comparison
+      await apiService.saveToConfluence({
+        space_key: selectedSpace,
+        page_title: tempPageTitle,
+        content: newCode
+      });
+
+      // Run impact analysis between original and modified code
+      const result = await apiService.impactAnalyzer({
+        space_key: selectedSpace,
+        old_page_title: selectedPage,
+        new_page_title: tempPageTitle
+      });
+
+      setImpactResults(result.diff || '');
+      setImpactMetrics({
+        linesAdded: result.lines_added || 0,
+        linesRemoved: result.lines_removed || 0,
+        filesChanged: result.files_changed || 1,
+        percentageChanged: result.percentage_change || 0
+      });
+      
+      setImpactSummary(result.impact_analysis || '');
+      setImpactRiskLevel({
+        level: (result.risk_level || 'low') as 'low' | 'medium' | 'high',
+        score: result.risk_score || 0,
+        factors: result.risk_factors || []
+      });
+      
+      setShowImpactResults(true);
+
+      // Clean up temporary page
+      try {
+        // Note: In a real implementation, you might want to delete the temp page
+        // For now, we'll leave it as the API doesn't have a delete endpoint
+      } catch (cleanupErr) {
+        console.warn('Failed to cleanup temporary page:', cleanupErr);
+      }
+      
+    } catch (err) {
+      setError('Failed to analyze impact. Please try again.');
+      console.error('Error analyzing impact:', err);
+    } finally {
+      setIsImpactAnalyzing(false);
+    }
+  };
+
+  // Helper function to get risk color
+  const getRiskColor = (level: string) => {
+    switch (level) {
+      case 'low': return 'text-green-700 bg-green-100/80 backdrop-blur-sm border-green-200/50';
+      case 'medium': return 'text-yellow-700 bg-yellow-100/80 backdrop-blur-sm border-yellow-200/50';
+      case 'high': return 'text-red-700 bg-red-100/80 backdrop-blur-sm border-red-200/50';
+      default: return 'text-gray-700 bg-gray-100/80 backdrop-blur-sm border-gray-200/50';
+    }
+  };
+
+  // Helper function to get risk icon
+  const getRiskIcon = (level: string) => {
+    switch (level) {
+      case 'low': return <TrendingUp className="w-5 h-5" />;
+      case 'medium': return <TrendingUp className="w-5 h-5" />;
+      case 'high': return <TrendingUp className="w-5 h-5" />;
+      default: return <TrendingUp className="w-5 h-5" />;
+    }
+  };
+
+  // Check if there are any changes to show the Impact Analyze button
+  const hasChanges = () => {
+    const newCode = aiActionOutput || modificationOutput || conversionOutput || processedCode;
+    return newCode && newCode !== detectedCode && detectedCode;
   };
 
   // Update processCode to handle AI actions and outputs
@@ -550,6 +672,27 @@ const CodeAssistant: React.FC<CodeAssistantProps> = ({ onClose, onFeatureSelect,
                     </>
                   )}
                 </button>
+
+                {/* Impact Analyze Button - Only show when there are changes */}
+                {hasChanges() && (
+                  <button
+                    onClick={analyzeImpact}
+                    disabled={isImpactAnalyzing}
+                    className="w-full bg-orange-600/90 backdrop-blur-sm text-white py-3 px-4 rounded-lg hover:bg-orange-700 disabled:bg-gray-300 disabled:cursor-not-allowed flex items-center justify-center space-x-2 transition-colors border border-white/10 mt-3"
+                  >
+                    {isImpactAnalyzing ? (
+                      <>
+                        <Loader2 className="w-5 h-5 animate-spin" />
+                        <span>Analyzing Impact...</span>
+                      </>
+                    ) : (
+                      <>
+                        <GitCompare className="w-5 h-5" />
+                        <span>Impact Analyze</span>
+                      </>
+                    )}
+                  </button>
+                )}
               </div>
             </div>
 
@@ -581,7 +724,7 @@ const CodeAssistant: React.FC<CodeAssistantProps> = ({ onClose, onFeatureSelect,
               )}
             </div>
 
-            {/* Right Column - Processed Code */}
+            {/* Right Column - Processed Code and Impact Results */}
             <div className="space-y-6">
               {/* AI Result section: show all outputs */}
               <div className="bg-white/60 backdrop-blur-xl rounded-xl p-4 border border-white/20 shadow-lg">
@@ -634,6 +777,105 @@ const CodeAssistant: React.FC<CodeAssistantProps> = ({ onClose, onFeatureSelect,
                   </div>
                 )}
               </div>
+
+              {/* Impact Analysis Results - Display below AI Result section */}
+              {showImpactResults && impactResults && (
+                <div className="bg-white/60 backdrop-blur-xl rounded-xl p-4 border border-white/20 shadow-lg">
+                  <h3 className="font-semibold text-gray-800 mb-4 flex items-center">
+                    <GitCompare className="w-5 h-5 mr-2" />
+                    Impact Analysis Results
+                  </h3>
+                  
+                  {/* Metrics Display */}
+                  {impactMetrics && (
+                    <div className="mb-4">
+                      <h4 className="font-semibold text-gray-800 mb-3">Change Metrics</h4>
+                      <div className="grid grid-cols-2 gap-2 text-sm">
+                        <div className="bg-green-100/80 backdrop-blur-sm p-2 rounded text-center border border-white/20">
+                          <div className="font-semibold text-green-800">+{impactMetrics.linesAdded}</div>
+                          <div className="text-green-600 text-xs">Added</div>
+                        </div>
+                        <div className="bg-red-100/80 backdrop-blur-sm p-2 rounded text-center border border-white/20">
+                          <div className="font-semibold text-red-800">-{impactMetrics.linesRemoved}</div>
+                          <div className="text-red-600 text-xs">Removed</div>
+                        </div>
+                        <div className="bg-blue-100/80 backdrop-blur-sm p-2 rounded text-center border border-white/20">
+                          <div className="font-semibold text-blue-800">{impactMetrics.filesChanged}</div>
+                          <div className="text-blue-600 text-xs">Files</div>
+                        </div>
+                        <div className="bg-purple-100/80 backdrop-blur-sm p-2 rounded text-center border border-white/20">
+                          <div className="font-semibold text-purple-800">{impactMetrics.percentageChanged}%</div>
+                          <div className="text-purple-600 text-xs">Changed</div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Risk Level */}
+                  {impactRiskLevel && (
+                    <div className="mb-4">
+                      <h4 className="font-semibold text-gray-800 mb-2">Risk Assessment</h4>
+                      <div className={`p-3 rounded-lg flex items-center space-x-2 border ${getRiskColor(impactRiskLevel.level)}`}>
+                        {getRiskIcon(impactRiskLevel.level)}
+                        <div>
+                          <div className="font-semibold capitalize">{impactRiskLevel.level} Risk</div>
+                          <div className="text-sm">Score: {impactRiskLevel?.score}/10</div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Code Diff */}
+                  <div className="mb-4">
+                    <h4 className="font-semibold text-gray-800 mb-3">Code Diff</h4>
+                    <div className="bg-gray-900/90 backdrop-blur-sm rounded-lg p-4 overflow-auto max-h-80 border border-white/10">
+                      <pre className="text-sm">
+                        <code>
+                          {impactResults.split('\n').map((line, index) => (
+                            <div
+                              key={index}
+                              className={
+                                line.startsWith('+') ? 'text-green-400' :
+                                line.startsWith('-') ? 'text-red-400' :
+                                line.startsWith('@@') ? 'text-blue-400' :
+                                'text-gray-300'
+                              }
+                            >
+                              {line}
+                            </div>
+                          ))}
+                        </code>
+                      </pre>
+                    </div>
+                  </div>
+
+                  {/* Impact Summary */}
+                  {impactSummary && (
+                    <div>
+                      <h4 className="font-semibold text-gray-800 mb-3">AI Impact Summary</h4>
+                      <div className="bg-white/70 backdrop-blur-sm rounded-lg p-4 border border-white/20 prose prose-sm max-w-none">
+                        {impactSummary.split('\n').map((line, index) => {
+                          if (line.startsWith('### ')) {
+                            return <h3 key={index} className="text-lg font-bold text-gray-800 mt-4 mb-2">{line.substring(4)}</h3>;
+                          } else if (line.startsWith('## ')) {
+                            return <h2 key={index} className="text-xl font-bold text-gray-800 mt-6 mb-3">{line.substring(3)}</h2>;
+                          } else if (line.startsWith('- **')) {
+                            const match = line.match(/- \*\*(.*?)\*\*: (.*)/);
+                            if (match) {
+                              return <p key={index} className="mb-2"><strong>{match[1]}:</strong> {match[2]}</p>;
+                            }
+                          } else if (line.match(/^\d+\./)) {
+                            return <p key={index} className="mb-2 font-medium">{line}</p>;
+                          } else if (line.trim()) {
+                            return <p key={index} className="mb-2 text-gray-700">{line}</p>;
+                          }
+                          return <br key={index} />;
+                        })}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
 
               {/* Export Options */}
               {processedCode && (

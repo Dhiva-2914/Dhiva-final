@@ -194,6 +194,7 @@ const AgentMode: React.FC<AgentModeProps> = ({ onClose, onModeSelect, autoSpaceK
   const [error, setError] = useState('');
   const [selectAllPages, setSelectAllPages] = useState(false);
   const [pageTypes, setPageTypes] = useState<PageWithType[]>([]);
+  const [pageSearchTerm, setPageSearchTerm] = useState('');
 
   // Add progressPercent state for live progress bar
   const [progressPercent, setProgressPercent] = useState(0);
@@ -276,14 +277,20 @@ const AgentMode: React.FC<AgentModeProps> = ({ onClose, onModeSelect, autoSpaceK
 
   // Sync "Select All" checkbox state
   useEffect(() => {
-    setSelectAllPages(pages.length > 0 && selectedPages.length === pages.length);
-  }, [selectedPages, pages]);
+    const filteredPages = pages.filter(page => 
+      page.toLowerCase().includes(pageSearchTerm.toLowerCase())
+    );
+    setSelectAllPages(filteredPages.length > 0 && selectedPages.length === filteredPages.length);
+  }, [selectedPages, pages, pageSearchTerm]);
 
   const toggleSelectAllPages = () => {
+    const filteredPages = pages.filter(page => 
+      page.toLowerCase().includes(pageSearchTerm.toLowerCase())
+    );
     if (selectAllPages) {
       setSelectedPages([]);
     } else {
-      setSelectedPages([...pages]);
+      setSelectedPages([...filteredPages]);
     }
     setSelectAllPages(!selectAllPages);
   };
@@ -1084,24 +1091,36 @@ ${isHistoryExport ? `*Historical Entry ID: ${currentHistoryId}*` : ''}`;
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     Select Pages to Analyze
                   </label>
+                  {/* Search Bar */}
+                  <div className="mb-3">
+                    <input
+                      type="text"
+                      value={pageSearchTerm}
+                      onChange={(e) => setPageSearchTerm(e.target.value)}
+                      placeholder="Search pages..."
+                      className="w-full p-3 border border-white/30 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 bg-white/70 backdrop-blur-sm"
+                    />
+                  </div>
                   <div className="space-y-2 max-h-40 overflow-y-auto border border-white/30 rounded-lg p-2 bg-white/50 backdrop-blur-sm">
-                    {pages.map(page => (
-                      <label key={page} className="flex items-center space-x-2 p-2 hover:bg-white/30 rounded cursor-pointer backdrop-blur-sm">
-                        <input
-                          type="checkbox"
-                          checked={selectedPages.includes(page)}
-                          onChange={(e) => {
-                            if (e.target.checked) {
-                              setSelectedPages([...selectedPages, page]);
-                            } else {
-                              setSelectedPages(selectedPages.filter(p => p !== page));
-                            }
-                          }}
-                          className="rounded border-gray-300 text-orange-500 focus:ring-orange-500"
-                        />
-                        <span className="text-sm text-gray-700">{page}</span>
-                      </label>
-                    ))}
+                    {pages
+                      .filter(page => page.toLowerCase().includes(pageSearchTerm.toLowerCase()))
+                      .map(page => (
+                        <label key={page} className="flex items-center space-x-2 p-2 hover:bg-white/30 rounded cursor-pointer backdrop-blur-sm">
+                          <input
+                            type="checkbox"
+                            checked={selectedPages.includes(page)}
+                            onChange={(e) => {
+                              if (e.target.checked) {
+                                setSelectedPages([...selectedPages, page]);
+                              } else {
+                                setSelectedPages(selectedPages.filter(p => p !== page));
+                              }
+                            }}
+                            className="rounded border-gray-300 text-orange-500 focus:ring-orange-500"
+                          />
+                          <span className="text-sm text-gray-700">{page}</span>
+                        </label>
+                      ))}
                   </div>
                   <div className="flex items-center space-x-2 mb-2 mt-2">
                     <input
